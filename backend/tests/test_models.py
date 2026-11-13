@@ -73,6 +73,54 @@ class ShapeHatchModels(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "непустую"):
             generate(GenerateRequest(kind="plate", plate=PlateOptions(text="\n  ")))
 
+    def test_plate_mounts_on_each_shape(self):
+        for shape in ("rounded", "rectangle", "oval", "circle", "hexagon"):
+            for attachment in ("hole", "loop"):
+                with self.subTest(shape=shape, mount=attachment):
+                    plate = PlateOptions(text="А", width_mm=90, height_mm=54,
+                                         shape=shape, mount_type=attachment,
+                                         mount_side="top", mount_position=0.5)
+                    result = generate(GenerateRequest(kind="plate", plate=plate))
+                    self.assert_meshes(result)
+                    self.assertEqual(len(result.parts), 2)
+                    base = result.parts[0]
+                    self.assertAlmostEqual(
+                        min(v[2] for v in base.vertices), 0, delta=1e-5)
+                    self.assertAlmostEqual(
+                        max(v[2] for v in base.vertices), plate.thickness_mm, delta=1e-5)
+
+    def test_plate_mounts_are_printable_with_all_text_styles(self):
+        for style in ("raised", "inlay", "engraved"):
+            for attachment in ("hole", "loop"):
+                with self.subTest(style=style, mount=attachment):
+                    options = PlateOptions(
+                        text="А\nБ", width_mm=85, height_mm=48,
+                        text_style=style, mount_type=attachment,
+                        mount_side="left", mount_position=0.5)
+                    result = generate(GenerateRequest(kind="plate", plate=options))
+                    self.assert_meshes(result)
+                    self.assertEqual(len(result.parts), 3 if style == "inlay" else 2)
+                    with zipfile.ZipFile(io.BytesIO(make_3mf(result))) as archive:
+                        self.assertIn("3D/3dmodel.model", archive.namelist())
+
+    def test_plate_mount_changes_geometry(self):
+        bare = PlateOptions(text="А", width_mm=90, height_mm=40)
+        mounted = bare.model_copy(update={"mount_type": "loop"})
+        holed = bare.model_copy(update={"mount_type": "hole"})
+        def base_volume(options):
+            part = generate(GenerateRequest(kind="plate", plate=options)).parts[0]
+            return trimesh.Trimesh(vertices=part.vertices, faces=part.faces,
+                                   process=False).volume
+        self.assertGreater(base_volume(mounted), base_volume(bare))
+        self.assertLess(base_volume(holed), base_volume(bare))
+
+    def test_plate_hole_rejects_impossible_dimensions(self):
+        options = PlateOptions(text="А", width_mm=90, height_mm=12,
+                               mount_type="hole", mount_hole_mm=12,
+                               mount_wall_mm=6)
+        with self.assertRaisesRegex(ValueError, "Отверстие не помещается"):
+            generate(GenerateRequest(kind="plate", plate=options))
+
     def test_inlay(self):
         result = generate(GenerateRequest(kind="plate", plate=PlateOptions(
             text="АННА", text_style="inlay")))
