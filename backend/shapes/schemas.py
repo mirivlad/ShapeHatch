@@ -35,6 +35,11 @@ class PlateOptions(BaseModel):
     thickness_mm: float = Field(default=3, ge=0.8, le=25)
     shape: Literal["rounded", "rectangle", "oval", "circle", "hexagon"] = "rounded"
     corner_radius_mm: float = Field(default=6, ge=0, le=50)
+    mount_type: Literal["none", "hole", "loop"] = "none"
+    mount_side: Literal["top", "bottom", "left", "right"] = "top"
+    mount_position: float = Field(default=0.5, ge=0, le=1)
+    mount_hole_mm: float = Field(default=5.0, ge=2, le=12)
+    mount_wall_mm: float = Field(default=2.3, ge=1, le=6)
     font: Literal["sans", "serif", "mono", "bold"] = "sans"
     font_size_mm: float = Field(default=8, ge=2, le=60)
     text_align: Literal["left", "center", "right"] = "center"
