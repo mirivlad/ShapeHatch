@@ -123,6 +123,57 @@ def plate_shape(opts: PlateOptions):
     return Polygon([(w/2 * cos(pi/3*i), h/2 * sin(pi/3*i)) for i in range(6)])
 
 
+def _plate_edge(shape, side: str, position: float):
+    """Find the real boundary point at a fraction of an edge's span.
+
+    Intersecting a slice with the shape avoids projecting to the middle of an
+    ellipse when a ring is requested close to one of its ends.
+    """
+    x0, y0, x1, y1 = shape.bounds
+    if side in ("top", "bottom"):
+        x = x0 + (x1 - x0) * position
+        section = shape.intersection(LineString([(x, y0 - 1), (x, y1 + 1)]))
+        if section.is_empty:
+            raise ValueError("Не удалось найти край плашки для крепления.")
+        return Point(x, section.bounds[3] if side == "top" else section.bounds[1]), (0, 1 if side == "top" else -1)
+    y = y0 + (y1 - y0) * position
+    section = shape.intersection(LineString([(x0 - 1, y), (x1 + 1, y)]))
+    if section.is_empty:
+        raise ValueError("Не удалось найти край плашки для крепления.")
+    return Point(section.bounds[0] if side == "left" else section.bounds[2], y), (-1 if side == "left" else 1, 0)
+
+
+def plate_with_mount(shape, opts: PlateOptions):
+    """Add a same-plane keyring eyelet or drill a through-hole in the plate."""
+    if opts.mount_type == "none":
+        return shape
+    anchor, (nx, ny) = _plate_edge(shape, opts.mount_side, opts.mount_position)
+    inner = opts.mount_hole_mm / 2
+    wall = opts.mount_wall_mm
+    if opts.mount_type == "hole":
+        # The hole must be fully enclosed, with enough material around it.
+        center = Point(anchor.x - nx * (inner + wall + 0.3),
+                       anchor.y - ny * (inner + wall + 0.3))
+        opening = center.buffer(inner, resolution=48)
+        if not shape.buffer(-wall + 0.00001).covers(opening):
+            raise ValueError("Отверстие не помещается с заданной толщиной стенки. Измените положение или размеры.")
+        return shape.difference(opening).buffer(0)
+
+    center = Point(anchor.x + nx * (inner + 0.85),
+                   anchor.y + ny * (inner + 0.85))
+    outer = center.buffer(inner + wall, resolution=48)
+    opening = center.buffer(inner, resolution=48)
+    # Overlap the plate and eyelet; never leave a barely touching ring.
+    connector = LineString([
+        (anchor.x - nx * 0.7, anchor.y - ny * 0.7),
+        (center.x, center.y),
+    ]).buffer(wall / 2, resolution=16)
+    result = unary_union([shape, outer, connector]).difference(opening).buffer(0)
+    if len(polygons(result)) != 1:
+        raise ValueError("Не удалось надёжно соединить ушко с плашкой. Измените положение.")
+    return result
+
+
 def plate_parts(base_shape, text_shape, opts: PlateOptions):
     warnings = []
     depth = opts.text_depth_mm
