@@ -43,7 +43,7 @@ class PlateOptions(BaseModel):
     mount_position: float = Field(default=0.5, ge=0, le=1)
     mount_hole_mm: float = Field(default=5.0, ge=2, le=12)
     mount_wall_mm: float = Field(default=2.3, ge=1, le=6)
-    font: Literal["sans", "serif", "mono", "bold"] = "sans"
+    font: Literal["sans", "serif", "mono", "bold", "russo", "play", "pt-sans", "lobster", "rubik-mono", "unbounded", "comfortaa", "terminus"] = "sans"
     font_size_mm: float = Field(default=8, ge=2, le=60)
     text_align: Literal["left", "center", "right"] = "center"
     line_spacing_mm: float = Field(default=1.5, ge=0, le=15)
@@ -82,3 +82,5 @@ class Preview(BaseModel):
     mount_contour: list[list[float]] = Field(default_factory=list)
     mount_fraction: float | None = None
     mount_surface_z: float = 0.0
+    text_bounds_mm: list[float] | None = None
+    text_surface_z: float = 0.0

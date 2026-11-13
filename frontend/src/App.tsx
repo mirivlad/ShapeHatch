@@ -1,12 +1,14 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import {
-  Box, Check, ChevronLeft, CircleHelp, Download, FileImage, FolderOpen, ImagePlus,
+  Box, Check, ChevronDown, ChevronLeft, CircleHelp, Download, FileImage, FolderOpen, ImagePlus,
   Layers3, LoaderCircle, Plus, RotateCcw, Save, Settings2, Shapes, Trash2,
-  Type, UploadCloud, X, ZoomIn
+  Type, UploadCloud, X, ZoomIn,
+  type LucideIcon
 } from "lucide-react";
 import { Viewer, type CameraView } from "./Viewer";
 import { goatDataUrl, initialPlate, initialSilhouette } from "./sample";
 import { getProjects, removeProject, saveProject } from "./storage";
+import { loadMountPreferences, storeMountPreferences } from "./mountPreferences";
 import type { Plate, Preview, Project, Section, Silhouette } from "./types";
 
 function NumberInput({ label, value, onChange, min, max, step=0.1 }: {
@@ -35,14 +37,32 @@ function ColorInput({label,value,onChange}:{label:string;value:string;onChange:(
   <span>{value}</span></div></label>;
 }
 
+function Accordion({title,icon:Icon,opened,onToggle,children}:{
+ title:string;icon:LucideIcon;opened:boolean;onToggle:()=>void;children:ReactNode
+}) {
+ return <section className={"settings-group accordion"+(opened?" expanded":"")}>
+  <h3><button type="button" className="accordion-header" aria-expanded={opened}
+    onClick={onToggle}><Icon size={18}/><span>{title}</span>
+    <ChevronDown size={17} className="accordion-arrow"/></button></h3>
+  {opened&&<div className="accordion-body">{children}</div>}
+ </section>;
+}
+
 const views:{id:CameraView;label:string}[]=[
  {id:"iso",label:"3D"},{id:"top",label:"Сверху"},{id:"front",label:"Спереди"},
  {id:"left",label:"Слева"},{id:"right",label:"Справа"},{id:"bottom",label:"Снизу"}];
 
 export function App() {
  const [section,setSection]=useState<Section>("home");
- const [silhouette,setSilhouette]=useState<Silhouette>(initialSilhouette);
- const [plate,setPlate]=useState<Plate>(initialPlate);
+ const [mountPrefs,setMountPrefs]=useState(loadMountPreferences);
+ const [silhouette,setSilhouette]=useState<Silhouette>(()=>({
+  ...initialSilhouette,loop_hole_mm:mountPrefs.holeMm,loop_wall_mm:mountPrefs.wallMm
+ }));
+ const [plate,setPlate]=useState<Plate>(()=>({
+  ...initialPlate,mount_hole_mm:mountPrefs.holeMm,mount_wall_mm:mountPrefs.wallMm
+ }));
+ const [openGroup,setOpenGroup]=useState("image");
+ const toggleGroup=(id:string)=>setOpenGroup(old=>old===id?"":id);
  const [model,setModel]=useState<Preview|null>(null);
  const [view,setView]=useState<CameraView>("iso");
  const [busy,setBusy]=useState(false);
@@ -53,8 +73,17 @@ export function App() {
  const [galleryFilter,setGalleryFilter]=useState<"all"|"silhouette"|"plate">("all");
  const [projectId,setProjectId]=useState<string|null>(null);
  const [projectName,setProjectName]=useState("");
- const changeSilhouette=<K extends keyof Silhouette>(key:K,value:Silhouette[K])=>setSilhouette(prev=>({...prev,[key]:value}));
- const changePlate=<K extends keyof Plate>(key:K,value:Plate[K])=>setPlate(prev=>({...prev,[key]:value}));
+ const changeSilhouette=<K extends keyof Silhouette>(key:K,value:Silhouette[K])=>{
+  setSilhouette(prev=>({...prev,[key]:value}));
+  if(key==="loop_hole_mm"||key==="loop_wall_mm")
+   setMountPrefs(prev=>({...prev,[key==="loop_hole_mm"?"holeMm":"wallMm"]:Number(value)}));
+ };
+ const changePlate=<K extends keyof Plate>(key:K,value:Plate[K])=>{
+  setPlate(prev=>({...prev,[key]:value}));
+  if(key==="mount_hole_mm"||key==="mount_wall_mm")
+   setMountPrefs(prev=>({...prev,[key==="mount_hole_mm"?"holeMm":"wallMm"]:Number(value)}));
+ };
+ useEffect(()=>storeMountPreferences(mountPrefs),[mountPrefs]);
  const isEditor=section==="silhouette"||section==="plate";
  const visibleProjects=projects.filter(p=>galleryFilter==="all"||p.kind===galleryFilter);
  const kind=section==="plate"?"plate":"silhouette";
@@ -74,7 +103,11 @@ export function App() {
     if(!response.ok) throw new Error(typeof body.detail==="string"?body.detail:"Не удалось создать модель.");
     setModel(body as Preview);
    } catch(ex) {
-    if(!abort.signal.aborted) {setModel(null);setError(ex instanceof Error?ex.message:String(ex));}
+    if(!abort.signal.aborted) {
+     // Keep the last good mesh and drag controls visible so invalid text can
+     // be moved back inside the plate; exporting remains disabled on error.
+     setError(ex instanceof Error?ex.message:String(ex));
+    }
    } finally {if(!abort.signal.aborted)setBusy(false);}
   },480);
   return ()=>{clearTimeout(timeout);abort.abort();};
@@ -86,13 +119,14 @@ export function App() {
  }
  function navigate(next:Section) {
   setSection(next);setModel(null);setError("");
+  if(next==="plate"||next==="silhouette")setOpenGroup(next==="plate"?"base":"image");
   if(next==="gallery")void refreshGallery();
  }
  function create(next:"silhouette"|"plate") {
   setProjectId(null);
   setProjectName("");
-  setSilhouette(initialSilhouette);
-  setPlate(initialPlate);
+  setSilhouette({...initialSilhouette,loop_hole_mm:mountPrefs.holeMm,loop_wall_mm:mountPrefs.wallMm});
+  setPlate({...initialPlate,mount_hole_mm:mountPrefs.holeMm,mount_wall_mm:mountPrefs.wallMm});
   setView("iso");
   navigate(next);
  }
@@ -219,7 +253,7 @@ export function App() {
 
     <div className="settings-scroll">
     {kind==="silhouette"?<>
-     <div className="settings-group"><h3><ImagePlus size={18}/> Изображение</h3>
+     <Accordion title="Изображение" icon={ImagePlus} opened={openGroup==="image"} onToggle={()=>toggleGroup("image")}>
       <label className="upload-box"><UploadCloud size={25}/><strong>Загрузить изображение</strong>
        <small>PNG, JPG, WebP, SVG · до 5 МБ</small>
        <input type="file" accept=".png,.jpg,.jpeg,.webp,.svg,image/png,image/jpeg,image/webp,image/svg+xml"
@@ -235,8 +269,8 @@ export function App() {
        <NumberInput label="Сглаживание, мм" value={silhouette.smoothing_mm} step={0.05} min={0} max={2}
          onChange={v=>changeSilhouette("smoothing_mm",v)}/>
       </div><Toggle label="Инвертировать" checked={silhouette.invert} onChange={v=>changeSilhouette("invert",v)}/>
-     </div>
-     <div className="settings-group"><h3><Settings2 size={18}/> Размеры</h3>
+     </Accordion>
+     <Accordion title="Размеры" icon={Settings2} opened={openGroup==="dimensions"} onToggle={()=>toggleGroup("dimensions")}>
       <div className="field-row"><NumberInput label="Ширина, мм" value={silhouette.width_mm} min={10} max={300}
        onChange={v=>changeSilhouette("width_mm",v)}/>
       {silhouette.attach_loop && silhouette.loop_orientation==="upright"
@@ -245,8 +279,8 @@ export function App() {
        :<NumberInput label="Толщина, мм" value={silhouette.thickness_mm} min={0.6} max={25}
          onChange={v=>changeSilhouette("thickness_mm",v)}/>}</div>
       <ColorInput label="Цвет изделия" value={silhouette.color} onChange={v=>changeSilhouette("color",v)}/>
-     </div>
-     <div className="settings-group"><h3><Layers3 size={18}/> Петелька для кольца</h3>
+     </Accordion>
+     <Accordion title="Петелька для кольца" icon={Layers3} opened={openGroup==="loop"} onToggle={()=>toggleGroup("loop")}>
       <Toggle label="Добавить петельку" checked={silhouette.attach_loop} onChange={v=>changeSilhouette("attach_loop",v)}/>
       {silhouette.attach_loop&&<>
        <OptionSelect label="Ориентация петельки" value={silhouette.loop_orientation??"flat"}
@@ -269,9 +303,9 @@ export function App() {
          onChange={v=>changeSilhouette("loop_wall_mm",v)}/>
        </div>
       </>}
-     </div>
+     </Accordion>
     </>:<>
-     <div className="settings-group"><h3><Box size={18}/> Основа</h3>
+     <Accordion title="Основа" icon={Box} opened={openGroup==="base"} onToggle={()=>toggleGroup("base")}>
       <OptionSelect label="Форма" value={plate.shape} onChange={v=>changePlate("shape",v as Plate["shape"])}
        options={[{value:"rounded",label:"Скруглённый прямоугольник"},{value:"rectangle",label:"Прямоугольник"},
         {value:"oval",label:"Овал"},{value:"circle",label:"Круг"},{value:"hexagon",label:"Шестиугольник"}]}/>
@@ -289,8 +323,8 @@ export function App() {
         onChange={v=>changePlate("corner_radius_mm",v)}/>}
       </div>
       <ColorInput label="Цвет основы" value={plate.base_color} onChange={v=>changePlate("base_color",v)}/>
-     </div>
-     <div className="settings-group"><h3><Layers3 size={18}/> Крепление для кольца</h3>
+     </Accordion>
+     <Accordion title="Крепление для кольца" icon={Layers3} opened={openGroup==="mount"} onToggle={()=>toggleGroup("mount")}>
       <OptionSelect label="Тип крепления" value={plate.mount_type??"none"}
        options={[{value:"none",label:"Без крепления"},{value:"hole",label:"Отверстие в плашке"},
         {value:"loop",label:"Петелька в плоскости"},{value:"upright",label:"Столбик с поперечным отверстием"}]}
@@ -313,14 +347,22 @@ export function App() {
        </div><small className="field-hint">Плоская петелька имеет отверстие на лицевой стороне.
         У столбика отверстие видно сбоку. Сквозное отверстие внутри основы остаётся отдельным режимом.</small>
       </>}
-     </div>
-     <div className="settings-group"><h3><Type size={18}/> Надпись</h3>
+     </Accordion>
+     <Accordion title="Надпись" icon={Type} opened={openGroup==="text"} onToggle={()=>toggleGroup("text")}>
+      <p className="mount-instructions">Перетащите оранжевую ручку в центре текстовой области по поверхности плашки.
+      Точное смещение можно задать ниже в миллиметрах.</p>
       <label className="field"><span>Текст</span><textarea rows={4} maxLength={120} value={plate.text}
        onChange={e=>changePlate("text",e.target.value.replace(/\r\n?/g,"\n"))}/>
        <small className="field-hint">Enter — новая строка. Все строки видны в 3D-просмотре.</small></label>
       <OptionSelect label="Шрифт" value={plate.font} onChange={v=>changePlate("font",v as Plate["font"])}
        options={[{value:"sans",label:"DejaVu Sans"},{value:"bold",label:"DejaVu Sans Bold"},
-        {value:"serif",label:"DejaVu Serif"},{value:"mono",label:"DejaVu Mono"}]}/>
+        {value:"serif",label:"DejaVu Serif"},{value:"mono",label:"DejaVu Mono"},
+        {value:"russo",label:"Russo One — массивный"},{value:"play",label:"Play Bold — техно"},
+        {value:"pt-sans",label:"PT Sans — универсальный"},{value:"lobster",label:"Lobster — рукописный"},
+        {value:"rubik-mono",label:"Rubik Mono One — геометрический"},
+        {value:"unbounded",label:"Unbounded — современный"},
+        {value:"comfortaa",label:"Comfortaa — округлый"},
+        {value:"terminus",label:"Terminus TTF — пиксельный"}]}/>
       <div className="field-row">
        <OptionSelect label="Выравнивание" value={plate.text_align??"center"}
         options={[{value:"left",label:"По левому краю"},{value:"center",label:"По центру"},{value:"right",label:"По правому краю"}]}
@@ -344,7 +386,7 @@ export function App() {
       </div>
       {plate.text_style!=="engraved"&&<ColorInput label="Цвет надписи" value={plate.text_color}
        onChange={v=>changePlate("text_color",v)}/>}
-     </div>
+     </Accordion>
     </>}
     </div>
     <div className="sidebar-footer">
@@ -358,7 +400,7 @@ export function App() {
    </aside>
 
    <section className="editor-main">
-    <div className="editor-bar"><div className="editor-title"><strong>3D-просмотр</strong><span>Масштабируйте, вращайте и перетаскивайте крепление</span></div>
+    <div className="editor-bar"><div className="editor-title"><strong>3D-просмотр</strong><span>Масштабируйте, вращайте, перемещайте крепление и надпись</span></div>
      <div className="view-buttons">{views.map(v=><button key={v.id} className={view===v.id?"selected":""}
       onClick={()=>setView(v.id)}>{v.label}</button>)}</div></div>
     <div className="scene">
@@ -367,9 +409,12 @@ export function App() {
        mountPosition={kind==="plate"?plate.mount_contour_t??null:silhouette.loop_contour_t??null}
        onMountPositionChange={fraction=>kind==="plate"
         ?changePlate("mount_contour_t",fraction)
-        :changeSilhouette("loop_contour_t",fraction)}/>
+        :changeSilhouette("loop_contour_t",fraction)}
+       textPosition={kind==="plate"?[plate.text_x_mm,plate.text_y_mm]:null}
+       onTextPositionChange={(x,y)=>setPlate(prev=>({...prev,text_x_mm:x,text_y_mm:y}))}/>
      <div className="scene-info"><span><ZoomIn size={14}/> Колесо — масштаб</span>
-      <span><RotateCcw size={14}/> ЛКМ — вращение</span><span>ПКМ — панорама</span></div>
+      <span><RotateCcw size={14}/> ЛКМ — вращение</span><span>ПКМ — панорама</span>
+      {kind==="plate"&&<span>Оранжевая ручка — текст</span>}</div>
      {busy&&<div className="scene-spinner"><LoaderCircle size={20} className="spin"/> Построение модели…</div>}
      {error&&<div className="scene-error"><CircleHelp size={18}/>{error}</div>}
     </div>
@@ -380,10 +425,10 @@ export function App() {
      {model?.warnings.map((warning,i)=><span className="model-warning" key={i}>{warning}</span>)}
     </div>
     <div className="exports">
-     <button className="export-main" disabled={!model||busy||!!exporting} onClick={()=>void download("3mf")}>
+     <button className="export-main" disabled={!model||busy||!!error||!!exporting} onClick={()=>void download("3mf")}>
       {exporting==="3mf"?<LoaderCircle size={17} className="spin"/>:<Download size={17}/>} Скачать 3MF</button>
-     <button className="export-alt" disabled={!model||busy||!!exporting} onClick={()=>void download("stl")}>STL</button>
-     <button className="export-alt" disabled={!model||busy||!!exporting} onClick={()=>void download("stl-zip")}>STL ZIP</button>
+     <button className="export-alt" disabled={!model||busy||!!error||!!exporting} onClick={()=>void download("stl")}>STL</button>
+     <button className="export-alt" disabled={!model||busy||!!error||!!exporting} onClick={()=>void download("stl-zip")}>STL ZIP</button>
     </div></div>
    </section>
   </main>}

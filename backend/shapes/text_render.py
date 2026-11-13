@@ -1,4 +1,5 @@
 """Turn Cyrillic-capable text into 2D polygons at print scale."""
+from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 from shapely import affinity
@@ -6,11 +7,21 @@ from shapely import affinity
 from .image_trace import polygons_from_mask
 from .schemas import PlateOptions
 
+BUNDLED = Path(__file__).resolve().parent.parent / "fonts"
+
 FONT_PATHS = {
     "sans": "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
     "bold": "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
     "mono": "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
     "serif": "/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf",
+    "russo": BUNDLED / "russo.ttf",
+    "play": BUNDLED / "play.ttf",
+    "pt-sans": BUNDLED / "pt-sans.ttf",
+    "lobster": BUNDLED / "lobster.ttf",
+    "rubik-mono": BUNDLED / "rubik-mono.ttf",
+    "unbounded": BUNDLED / "unbounded.ttf",
+    "comfortaa": BUNDLED / "comfortaa.ttf",
+    "terminus": BUNDLED / "terminus.ttf",
 }
 PIXELS_PER_MM = 8
 

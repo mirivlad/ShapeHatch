@@ -9,6 +9,8 @@ from .text_render import text_geometry
 
 def generate(request: GenerateRequest) -> Preview:
     current_fraction = None
+    text_bounds = None
+    text_surface_z = 0.0
     if request.kind == "silhouette":
         if request.silhouette is None:
             raise ValueError("Не заданы параметры силуэта.")
@@ -51,6 +53,8 @@ def generate(request: GenerateRequest) -> Preview:
                 shape = flat_mount(shape, anchor, normal,
                                    options.mount_hole_mm, options.mount_wall_mm, options.mount_type)
         text = text_geometry(options)
+        text_bounds = [round(float(v), 3) for v in text.bounds]
+        text_surface_z = effective_thickness + (options.text_depth_mm if options.text_style == "raised" else 0)
         if not shape.buffer(-0.25).covers(text):
             raise ValueError("Надпись выходит за границы основы или пересекает отверстие. Измените размеры или положение.")
         parts, warnings = plate_parts(shape, text, geometry_options)
@@ -72,4 +76,5 @@ def generate(request: GenerateRequest) -> Preview:
         raise ValueError("Модель слишком сложна; уменьшите детализацию изображения.")
     return Preview(parts=parts, size_mm=[round(v, 2) for v in bounds], warnings=warnings,
                    mount_contour=contour_samples(outline), mount_fraction=current_fraction,
-                   mount_surface_z=effective_thickness)
+                   mount_surface_z=effective_thickness,
+                   text_bounds_mm=text_bounds, text_surface_z=text_surface_z)

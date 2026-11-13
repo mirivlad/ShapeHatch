@@ -7,9 +7,10 @@
 ## First MVP features
 
 - Silhouette from PNG, JPG, WebP or SVG: image-to-polygon, dimensions, thickness, flat loop or edge-mounted rounded post with a transverse ring hole, inversion and cutout modes.
-- Text plates: five shapes; DejaVu fonts with Cyrillic; multiline text with left/center/right alignment and adjustable line spacing; optional through-hole, flat loop or cross-drilled mounting post; embossed, inlaid, engraved text; separate colors.
-- 3D viewer with mouse orbit, pan, zoom, orthographic camera shortcuts and orientation cube; drag the mount handle to snap it to the real external contour.
+- Text plates: five shapes; 12 Cyrillic-capable fonts (DejaVu, Russo One, Play Bold, PT Sans, Lobster, Rubik Mono One, Unbounded, Comfortaa, Terminus TTF); multiline text with left/center/right alignment and adjustable line spacing; optional through-hole, flat loop or cross-drilled mounting post; embossed, inlaid, engraved text; separate colors.
+- 3D viewer with mouse orbit, pan, zoom, orthographic camera shortcuts and orientation cube. Drag the turquoise handle to snap a mount to the real external contour; drag the orange handle to move plate lettering in X/Y.
 - STL, multipart STL ZIP, grouped multicolor 3MF.
+- Single-open accordion settings in the editor (the first section opens by default); ring-hole diameter and wall thickness retained between new projects in browser localStorage.
 - Local editable gallery powered by IndexedDB (no account, no server-side gallery yet).
 - All necessary services via Docker Compose.
 
@@ -48,8 +49,9 @@ Run backend tests in the API container:
 - Models are validated for watertight geometry. For the cross-drilled post, model thickness is set automatically to the nominal post diameter (hole diameter + twice the wall thickness). Thin walls and details may still be unprintable; real printer tests are required.
 - The gallery is **local browser storage**, not a public multi-user service. Clearing browser data destroys locally saved projects.
 - SVG sanitization is intentionally strict; external resources and active scripts are rejected. Keep the API isolated and resource-limited.
+- The eight extra bundled fonts are licensed under SIL OFL 1.1; see [font attribution and license copies](backend/fonts/README.md). Text with narrow strokes (especially Terminus) must be verified before printing.
 
-Roadmap: shared gallery, drag placement of text, multiple text objects, model thumbnails, new generators (vases/boxes/housings), slicer validation.
+Roadmap: shared gallery, multiple text objects, model thumbnails, new generators (vases/boxes/housings), slicer validation.
 
 ## License
 

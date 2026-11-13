@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
 import { GizmoHelper, GizmoViewcube, OrbitControls } from "@react-three/drei";
 import { BufferAttribute, BufferGeometry, DoubleSide, OrthographicCamera, Vector3 } from "three";
 import type { Part, Preview } from "./types";
 import { MountHandle } from "./MountHandle";
+import { TextHandle } from "./TextHandle";
 
 export type CameraView = "iso" | "top" | "bottom" | "front" | "back" | "left" | "right";
 
@@ -24,7 +25,12 @@ function MeshPart({ part }: { part: Part }) {
 
 function CameraController({ preview, view }: { preview: Preview | null; view: CameraView }) {
   const { camera, controls, size } = useThree();
+  const initialized = useRef(false);
+  const previousView = useRef<CameraView | null>(null);
   useEffect(() => {
+    // Refit when the model first appears or when user changes view;
+    // do not unexpectedly reorient the scene on each drag/preview rebuild.
+    if (!preview || (initialized.current && previousView.current===view)) return;
     const c = camera as OrthographicCamera;
     if (!c.isOrthographicCamera) return;
     const parts = preview?.parts ?? [];
@@ -60,13 +66,17 @@ function CameraController({ preview, view }: { preview: Preview | null; view: Ca
       orbit.target.copy(center);
       orbit.update();
     }
+    initialized.current=true;
+    previousView.current=view;
   }, [camera,controls,preview,view,size.width,size.height]);
   return null;
 }
 
-export function Viewer({preview,view,mountEnabled,mountPosition,onMountPositionChange}:{
+export function Viewer({preview,view,mountEnabled,mountPosition,onMountPositionChange,
+  textPosition,onTextPositionChange}:{
   preview:Preview|null;view:CameraView;mountEnabled:boolean;
-  mountPosition:number|null;onMountPositionChange:(fraction:number)=>void
+  mountPosition:number|null;onMountPositionChange:(fraction:number)=>void;
+  textPosition:[number,number]|null;onTextPositionChange:(x:number,y:number)=>void
 }) {
   const [dragging,setDragging]=useState(false);
   useEffect(()=>setDragging(false),[mountEnabled,view]);
@@ -83,6 +93,10 @@ export function Viewer({preview,view,mountEnabled,mountPosition,onMountPositionC
         fraction={mountPosition??preview.mount_fraction??0}
         surfaceZ={preview.mount_surface_z}
         onChange={onMountPositionChange} onDragging={setDragging}/>}
+      {preview?.text_bounds_mm && textPosition &&
+       <TextHandle bounds={preview.text_bounds_mm} position={textPosition}
+        surfaceZ={preview.text_surface_z} contour={preview.mount_contour}
+        onMove={onTextPositionChange} onDragging={setDragging}/>}
       <OrbitControls makeDefault enabled={!dragging}
        enableDamping dampingFactor={0.08} minZoom={0.15} maxZoom={35}/>
       <CameraController preview={preview} view={view}/>

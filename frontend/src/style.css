@@ -38,6 +38,18 @@ button.generator-card:hover{transform:translateY(-3px);box-shadow:0 14px 25px #1
 .settings-group{padding:20px 0;border-bottom:1px solid #e7eeee}.settings-group:last-child{border:0}
 .settings-group h3{display:flex;gap:8px;align-items:center;font-size:14px;color:#315059;margin:0 0 15px}
 .settings-group h3 svg{color:#4c9f86}
+/* Single-open, keyboard-accessible settings accordion. */
+.settings-group.accordion{padding:0;border-bottom:1px solid #e7eeee}
+.settings-group.accordion h3{margin:0}
+.accordion-header{width:100%;display:flex;align-items:center;gap:9px;padding:18px 0;
+background:transparent;border:0;color:#315059;font-size:14px;font-weight:800;text-align:left}
+.accordion-header svg:first-child{color:#4c9f86;flex-shrink:0}
+.accordion-header span{flex:1}
+.accordion-header .accordion-arrow{color:#7a9595;flex-shrink:0;transition:transform .17s}
+.accordion.expanded .accordion-arrow{transform:rotate(180deg)}
+.accordion-header:hover{color:#2f8a70}
+.accordion-header:focus-visible{outline:2px solid #4c9f86;outline-offset:-3px;border-radius:7px}
+.accordion-body{padding:0 0 19px}
 .field{display:flex;flex-direction:column;gap:7px;margin:11px 0;font-size:12px;font-weight:700;color:#687f86;min-width:0}
 .field input[type=number],.field select,.field textarea,.project-label input{background:#fbfdfc;border:1px solid #dce7e7;border-radius:8px;padding:9px 10px;width:100%;outline:none;color:#29444d;min-width:0;font-size:13px}
 .field input:focus,.field select:focus,.field textarea:focus,.project-label input:focus{border-color:#51ac91}
