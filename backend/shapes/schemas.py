@@ -37,6 +37,8 @@ class PlateOptions(BaseModel):
     corner_radius_mm: float = Field(default=6, ge=0, le=50)
     font: Literal["sans", "serif", "mono", "bold"] = "sans"
     font_size_mm: float = Field(default=8, ge=2, le=60)
+    text_align: Literal["left", "center", "right"] = "center"
+    line_spacing_mm: float = Field(default=1.5, ge=0, le=15)
     text_x_mm: float = Field(default=0, ge=-150, le=150)
     text_y_mm: float = Field(default=0, ge=-100, le=100)
     text_depth_mm: float = Field(default=0.8, ge=0.2, le=5)
