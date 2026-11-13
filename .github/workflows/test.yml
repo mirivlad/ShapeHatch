@@ -1,0 +1,22 @@
+name: Build and test
+on:
+  push:
+  pull_request:
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm install
+        working-directory: frontend
+      - run: npm run build
+        working-directory: frontend
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t shapehatch-api ./backend
+      - run: docker run --rm shapehatch-api python -m unittest discover -s tests -v
