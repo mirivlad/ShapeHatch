@@ -1,6 +1,6 @@
 from shapely.geometry import Polygon
 
-from .geometry import plate_parts, plate_shape, silhouette_parts
+from .geometry import plate_parts, plate_shape, plate_with_mount, silhouette_parts
 from .image_trace import trace_silhouette
 from .schemas import GenerateRequest, Preview
 from .text_render import text_geometry
@@ -16,7 +16,7 @@ def generate(request: GenerateRequest) -> Preview:
         if request.plate is None:
             raise ValueError("Не заданы параметры плашки.")
         options = request.plate
-        base = plate_shape(options)
+        base = plate_with_mount(plate_shape(options), options)
         text = text_geometry(options)
         if not base.buffer(-0.25).covers(text):
             raise ValueError("Надпись выходит за границы основы. Уменьшите текст или измените его положение.")
