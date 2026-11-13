@@ -7,7 +7,7 @@
 ## First MVP features
 
 - Silhouette from PNG, JPG, WebP or SVG: image-to-polygon, dimensions, thickness, planar ring with a hole, inversion and cutout modes.
-- Text plates: five shapes; DejaVu fonts with Cyrillic; multiline text with left/center/right alignment and adjustable line spacing; embossed, inlaid, engraved text; separate colors.
+- Text plates: five shapes; DejaVu fonts with Cyrillic; multiline text with left/center/right alignment and adjustable line spacing; optional through-hole or same-plane keyring eyelet; embossed, inlaid, engraved text; separate colors.
 - 3D viewer with mouse orbit, pan, zoom, orthographic camera shortcuts and orientation cube.
 - STL, multipart STL ZIP, grouped multicolor 3MF.
 - Local editable gallery powered by IndexedDB (no account, no server-side gallery yet).
