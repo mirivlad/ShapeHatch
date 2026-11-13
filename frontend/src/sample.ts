@@ -11,5 +11,6 @@ export const initialSilhouette: Silhouette = {
 export const initialPlate: Plate = {
  text:"МОЙ БРЕЛОК",width_mm:90,height_mm:32,thickness_mm:3,
  shape:"rounded",corner_radius_mm:5,font:"sans",font_size_mm:8,
+ text_align:"center",line_spacing_mm:1.5,
  text_x_mm:0,text_y_mm:0,text_depth_mm:0.8,text_style:"raised",
  base_color:"#246C82",text_color:"#F7F8F4"};
