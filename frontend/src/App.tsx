@@ -119,7 +119,7 @@ export function App() {
  }
  function openProject(item:Project) {
   if(item.kind==="plate"&&item.plate)setPlate({...initialPlate,...item.plate});
-  else if(item.silhouette)setSilhouette(item.silhouette);
+  else if(item.silhouette)setSilhouette({...initialSilhouette,...item.silhouette});
   setProjectId(item.id);setProjectName(item.name);setView("iso");navigate(item.kind);
  }
  async function remove(id:string) {
@@ -246,12 +246,15 @@ export function App() {
      <div className="settings-group"><h3><Layers3 size={18}/> Петелька для кольца</h3>
       <Toggle label="Добавить петельку" checked={silhouette.attach_loop} onChange={v=>changeSilhouette("attach_loop",v)}/>
       {silhouette.attach_loop&&<>
-       <OptionSelect label="Сторона" value={silhouette.loop_side}
-        options={[{value:"top",label:"Сверху"},{value:"bottom",label:"Снизу"},{value:"left",label:"Слева"},{value:"right",label:"Справа"}]}
-        onChange={v=>changeSilhouette("loop_side",v as Silhouette["loop_side"])}/>
-       <label className="field"><span>Положение вдоль стороны: {Math.round(silhouette.loop_position*100)}%</span>
-        <input type="range" min={0} max={1} step={0.01} value={silhouette.loop_position}
-         onChange={e=>changeSilhouette("loop_position",Number(e.target.value))}/></label>
+       <OptionSelect label="Ориентация петельки" value={silhouette.loop_orientation??"flat"}
+        options={[{value:"flat",label:"В плоскости брелка"},
+         {value:"upright",label:"Перпендикулярная"}]}
+        onChange={v=>changeSilhouette("loop_orientation",v as Silhouette["loop_orientation"])}/>
+       <p className="mount-instructions">Перетащите бирюзовый маркер на 3D-модели — он прилипает к внешнему контуру.</p>
+       <label className="field"><span>Точное положение по контуру: {Math.round(100*(silhouette.loop_contour_t??model?.mount_fraction??0))}%</span>
+        <input type="range" min={0} max={1} step={0.001}
+         value={silhouette.loop_contour_t??model?.mount_fraction??0}
+         onChange={e=>changeSilhouette("loop_contour_t",Number(e.target.value))}/></label>
        <div className="field-row">
         <NumberInput label="Диаметр отверстия, мм" value={silhouette.loop_hole_mm} min={2} max={12}
          onChange={v=>changeSilhouette("loop_hole_mm",v)}/>
@@ -279,21 +282,20 @@ export function App() {
      <div className="settings-group"><h3><Layers3 size={18}/> Крепление для кольца</h3>
       <OptionSelect label="Тип крепления" value={plate.mount_type??"none"}
        options={[{value:"none",label:"Без крепления"},{value:"hole",label:"Отверстие в плашке"},
-        {value:"loop",label:"Ушко снаружи"}]}
+        {value:"loop",label:"Петелька в плоскости"},{value:"upright",label:"Петелька перпендикулярно"}]}
        onChange={v=>changePlate("mount_type",v as Plate["mount_type"])}/>
-      {plate.mount_type!=="none"&&<><OptionSelect label="Сторона" value={plate.mount_side}
-       options={[{value:"top",label:"Сверху"},{value:"bottom",label:"Снизу"},
-        {value:"left",label:"Слева"},{value:"right",label:"Справа"}]}
-       onChange={v=>changePlate("mount_side",v as Plate["mount_side"])}/>
-       <label className="field"><span>Положение вдоль стороны: {Math.round(plate.mount_position*100)}%</span>
-        <input type="range" min={0} max={1} step={0.01} value={plate.mount_position}
-         onChange={e=>changePlate("mount_position",Number(e.target.value))}/></label>
+      {plate.mount_type!=="none"&&<>
+       <p className="mount-instructions">Перетащите бирюзовый маркер прямо по контуру модели.</p>
+       <label className="field"><span>Точное положение по контуру: {Math.round(100*(plate.mount_contour_t??model?.mount_fraction??0))}%</span>
+        <input type="range" min={0} max={1} step={0.001}
+         value={plate.mount_contour_t??model?.mount_fraction??0}
+         onChange={e=>changePlate("mount_contour_t",Number(e.target.value))}/></label>
        <div className="field-row">
         <NumberInput label="Диаметр отверстия, мм" value={plate.mount_hole_mm}
          min={2} max={12} onChange={v=>changePlate("mount_hole_mm",v)}/>
         <NumberInput label="Толщина стенки, мм" value={plate.mount_wall_mm}
          min={1} max={6} onChange={v=>changePlate("mount_wall_mm",v)}/>
-       </div><small className="field-hint">Кольцо располагается в плоскости плашки. Отверстие проходит насквозь.</small>
+       </div><small className="field-hint">Два положения ушка: в плоскости или перпендикулярно ей. Отверстие внутри плашки — сквозное.</small>
       </>}
      </div>
      <div className="settings-group"><h3><Type size={18}/> Надпись</h3>
@@ -340,11 +342,16 @@ export function App() {
    </aside>
 
    <section className="editor-main">
-    <div className="editor-bar"><div className="editor-title"><strong>3D-просмотр</strong><span>Масштабируйте и вращайте мышью</span></div>
+    <div className="editor-bar"><div className="editor-title"><strong>3D-просмотр</strong><span>Масштабируйте, вращайте и перетаскивайте крепление</span></div>
      <div className="view-buttons">{views.map(v=><button key={v.id} className={view===v.id?"selected":""}
       onClick={()=>setView(v.id)}>{v.label}</button>)}</div></div>
     <div className="scene">
-     <Viewer preview={model} view={view}/>
+     <Viewer key={kind} preview={model} view={view}
+       mountEnabled={kind==="plate"?plate.mount_type!=="none":silhouette.attach_loop}
+       mountPosition={kind==="plate"?plate.mount_contour_t??null:silhouette.loop_contour_t??null}
+       onMountPositionChange={fraction=>kind==="plate"
+        ?changePlate("mount_contour_t",fraction)
+        :changeSilhouette("loop_contour_t",fraction)}/>
      <div className="scene-info"><span><ZoomIn size={14}/> Колесо — масштаб</span>
       <span><RotateCcw size={14}/> ЛКМ — вращение</span><span>ПКМ — панорама</span></div>
      {busy&&<div className="scene-spinner"><LoaderCircle size={20} className="spin"/> Построение модели…</div>}

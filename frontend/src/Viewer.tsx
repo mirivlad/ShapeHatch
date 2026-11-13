@@ -1,8 +1,9 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
 import { GizmoHelper, GizmoViewcube, OrbitControls } from "@react-three/drei";
 import { BufferAttribute, BufferGeometry, DoubleSide, OrthographicCamera, Vector3 } from "three";
 import type { Part, Preview } from "./types";
+import { MountHandle } from "./MountHandle";
 
 export type CameraView = "iso" | "top" | "bottom" | "front" | "back" | "left" | "right";
 
@@ -63,7 +64,12 @@ function CameraController({ preview, view }: { preview: Preview | null; view: Ca
   return null;
 }
 
-export function Viewer({preview,view}:{preview:Preview|null;view:CameraView}) {
+export function Viewer({preview,view,mountEnabled,mountPosition,onMountPositionChange}:{
+  preview:Preview|null;view:CameraView;mountEnabled:boolean;
+  mountPosition:number|null;onMountPositionChange:(fraction:number)=>void
+}) {
+  const [dragging,setDragging]=useState(false);
+  useEffect(()=>setDragging(false),[mountEnabled,view]);
   return <div className="viewer-canvas">
     <Canvas orthographic camera={{position:[70,-90,130],zoom:5,near:0.01,far:30000}}>
       <color attach="background" args={["#e9eef0"]}/>
@@ -72,7 +78,13 @@ export function Viewer({preview,view}:{preview:Preview|null;view:CameraView}) {
       <directionalLight position={[-30,20,70]} intensity={1.2}/>
       <gridHelper args={[300,30,"#b6c4cd","#d0dbe0"]} rotation={[Math.PI/2,0,0]} position={[0,0,-0.35]}/>
       {preview?.parts.map((part,i)=><MeshPart key={i} part={part}/>)}
-      <OrbitControls makeDefault enableDamping dampingFactor={0.08} minZoom={0.15} maxZoom={35}/>
+      {mountEnabled && preview && preview.mount_contour?.length>2 &&
+       <MountHandle contour={preview.mount_contour}
+        fraction={mountPosition??preview.mount_fraction??0}
+        surfaceZ={preview.mount_surface_z}
+        onChange={onMountPositionChange} onDragging={setDragging}/>}
+      <OrbitControls makeDefault enabled={!dragging}
+       enableDamping dampingFactor={0.08} minZoom={0.15} maxZoom={35}/>
       <CameraController preview={preview} view={view}/>
       <GizmoHelper alignment="top-right" margin={[74,72]}>
         <GizmoViewcube font="Arial" color="#ffffff" textColor="#334650" hoverColor="#cff1ec" opacity={0.92}/>

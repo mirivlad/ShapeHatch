@@ -15,6 +15,8 @@ class SilhouetteOptions(BaseModel):
     smoothing_mm: float = Field(default=0.10, ge=0, le=2)
     attach_loop: bool = True
     loop_side: Literal["top", "bottom", "left", "right"] = "top"
+    loop_orientation: Literal["flat", "upright"] = "flat"
+    loop_contour_t: float | None = Field(default=None, ge=0, le=1)
     loop_position: float = Field(default=0.5, ge=0, le=1)
     loop_hole_mm: float = Field(default=5.0, ge=2, le=12)
     loop_wall_mm: float = Field(default=2.3, ge=1, le=6)
@@ -35,7 +37,8 @@ class PlateOptions(BaseModel):
     thickness_mm: float = Field(default=3, ge=0.8, le=25)
     shape: Literal["rounded", "rectangle", "oval", "circle", "hexagon"] = "rounded"
     corner_radius_mm: float = Field(default=6, ge=0, le=50)
-    mount_type: Literal["none", "hole", "loop"] = "none"
+    mount_type: Literal["none", "hole", "loop", "upright"] = "none"
+    mount_contour_t: float | None = Field(default=None, ge=0, le=1)
     mount_side: Literal["top", "bottom", "left", "right"] = "top"
     mount_position: float = Field(default=0.5, ge=0, le=1)
     mount_hole_mm: float = Field(default=5.0, ge=2, le=12)
@@ -76,3 +79,6 @@ class Preview(BaseModel):
     parts: list[MeshPart]
     size_mm: list[float]
     warnings: list[str]
+    mount_contour: list[list[float]] = Field(default_factory=list)
+    mount_fraction: float | None = None
+    mount_surface_z: float = 0.0

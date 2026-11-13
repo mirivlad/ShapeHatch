@@ -41,6 +41,8 @@ button.generator-card:hover{transform:translateY(-3px);box-shadow:0 14px 25px #1
 .field{display:flex;flex-direction:column;gap:7px;margin:11px 0;font-size:12px;font-weight:700;color:#687f86;min-width:0}
 .field input[type=number],.field select,.field textarea,.project-label input{background:#fbfdfc;border:1px solid #dce7e7;border-radius:8px;padding:9px 10px;width:100%;outline:none;color:#29444d;min-width:0;font-size:13px}
 .field input:focus,.field select:focus,.field textarea:focus,.project-label input:focus{border-color:#51ac91}
+.mount-instructions{font-size:11px;line-height:1.6;padding:10px 12px;color:#277866;
+background:#eff8f3;border:1px solid #cee5da;border-radius:8px;margin:10px 0}
 .field textarea{resize:vertical}.field-hint{font-weight:400;color:#91a2a7;line-height:1.5}.field-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px}
 .field input[type=range]{width:100%;accent-color:#4b9e85;margin:9px 0}
 .color-field{display:flex;align-items:center;gap:12px;border:1px solid #e1e8e7;border-radius:8px;padding:5px 10px;background:#fbfdfc}

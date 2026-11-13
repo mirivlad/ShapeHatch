@@ -7,10 +7,11 @@ export const initialSilhouette: Silhouette = {
  image_data:goatDataUrl,filename:"goat.svg",width_mm:55,thickness_mm:3,
  threshold:140,invert:false,mode:"filled",smoothing_mm:0.12,
  attach_loop:true,loop_side:"top",loop_position:0.62,
+ loop_orientation:"flat",loop_contour_t:null,
  loop_hole_mm:5,loop_wall_mm:2.2,color:"#293840"};
 export const initialPlate: Plate = {
  text:"МОЙ БРЕЛОК",width_mm:90,height_mm:32,thickness_mm:3,
- shape:"rounded",corner_radius_mm:5,mount_type:"none",
+ shape:"rounded",corner_radius_mm:5,mount_type:"none",mount_contour_t:null,
  mount_side:"top",mount_position:0.5,mount_hole_mm:5,mount_wall_mm:2.3,
  font:"sans",font_size_mm:8,
  text_align:"center",line_spacing_mm:1.5,
