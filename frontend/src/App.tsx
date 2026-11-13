@@ -111,14 +111,14 @@ export function App() {
  async function save() {
   if(!isEditor) return;
   const id=projectId??crypto.randomUUID();
-  const name=projectName.trim() || (kind==="plate" ? plate.text : silhouette.filename.replace(/\.[^.]+$/,""));
+  const name=projectName.trim() || (kind==="plate" ? plate.text.replace(/\s+/g," ").trim() : silhouette.filename.replace(/\.[^.]+$/,""));
   const entry:Project={id,name,kind,updatedAt:new Date().toISOString(),
    ...(kind==="plate"?{plate}:{silhouette})};
   try {await saveProject(entry);setProjectId(id);setProjectName(name);setToast("Проект сохранён в этом браузере.");}
   catch {setToast("Не удалось сохранить проект. Проверьте доступность IndexedDB.");}
  }
  function openProject(item:Project) {
-  if(item.kind==="plate"&&item.plate)setPlate(item.plate);
+  if(item.kind==="plate"&&item.plate)setPlate({...initialPlate,...item.plate});
   else if(item.silhouette)setSilhouette(item.silhouette);
   setProjectId(item.id);setProjectName(item.name);setView("iso");navigate(item.kind);
  }
@@ -277,11 +277,19 @@ export function App() {
       <ColorInput label="Цвет основы" value={plate.base_color} onChange={v=>changePlate("base_color",v)}/>
      </div>
      <div className="settings-group"><h3><Type size={18}/> Надпись</h3>
-      <label className="field"><span>Текст</span><textarea rows={2} maxLength={120} value={plate.text}
-       onChange={e=>changePlate("text",e.target.value.replace(/\n/g," "))}/></label>
+      <label className="field"><span>Текст</span><textarea rows={4} maxLength={120} value={plate.text}
+       onChange={e=>changePlate("text",e.target.value.replace(/\r\n?/g,"\n"))}/>
+       <small className="field-hint">Enter — новая строка. Все строки видны в 3D-просмотре.</small></label>
       <OptionSelect label="Шрифт" value={plate.font} onChange={v=>changePlate("font",v as Plate["font"])}
        options={[{value:"sans",label:"DejaVu Sans"},{value:"bold",label:"DejaVu Sans Bold"},
         {value:"serif",label:"DejaVu Serif"},{value:"mono",label:"DejaVu Mono"}]}/>
+      <div className="field-row">
+       <OptionSelect label="Выравнивание" value={plate.text_align??"center"}
+        options={[{value:"left",label:"По левому краю"},{value:"center",label:"По центру"},{value:"right",label:"По правому краю"}]}
+        onChange={v=>changePlate("text_align",v as Plate["text_align"])}/>
+       <NumberInput label="Интервал строк, мм" value={plate.line_spacing_mm??1.5}
+        min={0} max={15} step={0.5} onChange={v=>changePlate("line_spacing_mm",v)}/>
+      </div>
       <OptionSelect label="Тип надписи" value={plate.text_style} onChange={v=>changePlate("text_style",v as Plate["text_style"])}
        options={[{value:"raised",label:"Выпуклая"},{value:"inlay",label:"Цветная вставка"},{value:"engraved",label:"Гравировка"}]}/>
       <div className="field-row">
@@ -303,7 +311,7 @@ export function App() {
     </div>
     <div className="sidebar-footer">
      <label className="project-label">Название проекта
-      <input type="text" placeholder={kind==="silhouette"?"Козёл — брелок":plate.text}
+      <input type="text" placeholder={kind==="silhouette"?"Козёл — брелок":plate.text.replace(/\s+/g," ").trim()}
        value={projectName} onChange={e=>setProjectName(e.target.value)} maxLength={120}/>
      </label>
      <button className="save-btn" onClick={()=>void save()}><Save size={17}/> Сохранить проект</button>
