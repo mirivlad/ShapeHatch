@@ -47,6 +47,32 @@ class ShapeHatchModels(unittest.TestCase):
         self.assertEqual(len(result.parts), 2)
         self.assertEqual(result.parts[1].color, "#F8FBFA")
 
+    def test_multiline_plate_with_cyrillic(self):
+        options = PlateOptions(text="КОЗА\n2026", width_mm=90, height_mm=42,
+                               text_align="center", line_spacing_mm=2)
+        model = generate(GenerateRequest(kind="plate", plate=options))
+        self.assert_meshes(model)
+        self.assertEqual(len(model.parts), 2)
+        text_vertices = np.array(model.parts[1].vertices)
+        self.assertGreater(np.ptp(text_vertices[:, 1]), 13)
+        with zipfile.ZipFile(io.BytesIO(make_3mf(model))) as archive:
+            self.assertIn("3D/3dmodel.model", archive.namelist())
+
+    def test_multiline_inlay_and_alignment(self):
+        for align in ("left", "center", "right"):
+            with self.subTest(align=align):
+                plate = PlateOptions(text="МАЛЫШ\n2026",
+                                     width_mm=100, height_mm=44, text_style="inlay",
+                                     font_size_mm=8, text_align=align,
+                                     line_spacing_mm=1)
+                result = generate(GenerateRequest(kind="plate", plate=plate))
+                self.assert_meshes(result)
+                self.assertEqual(len(result.parts), 3)
+
+    def test_whitespace_only_multiline_text_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "непустую"):
+            generate(GenerateRequest(kind="plate", plate=PlateOptions(text="\n  ")))
+
     def test_inlay(self):
         result = generate(GenerateRequest(kind="plate", plate=PlateOptions(
             text="АННА", text_style="inlay")))
