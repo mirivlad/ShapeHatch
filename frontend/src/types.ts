@@ -12,7 +12,8 @@ export type Plate = {
  text:string; width_mm:number; height_mm:number; thickness_mm:number;
  shape:"rounded"|"rectangle"|"oval"|"circle"|"hexagon";
  corner_radius_mm:number; font:"sans"|"serif"|"mono"|"bold";
- font_size_mm:number; text_x_mm:number; text_y_mm:number;
+ font_size_mm:number; text_align:"left"|"center"|"right"; line_spacing_mm:number;
+ text_x_mm:number; text_y_mm:number;
  text_depth_mm:number; text_style:"raised"|"inlay"|"engraved";
  base_color:string; text_color:string;
 };
