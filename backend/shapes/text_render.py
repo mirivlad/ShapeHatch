@@ -16,18 +16,27 @@ PIXELS_PER_MM = 8
 
 
 def text_geometry(options: PlateOptions):
+    # Preserve intentional line breaks; Windows and classic Mac pasted text are normalized.
+    content = options.text.replace("\r\n", "\n").replace("\r", "\n")
+    if not content.strip():
+        raise ValueError("Введите непустую надпись.")
     font_size = max(8, round(options.font_size_mm * PIXELS_PER_MM))
     font = ImageFont.truetype(FONT_PATHS[options.font], font_size)
-    bounds = font.getbbox(options.text, stroke_width=0)
-    tw = bounds[2] - bounds[0]
-    th = bounds[3] - bounds[1]
-    if not tw or not th:
+    spacing = round(options.line_spacing_mm * PIXELS_PER_MM)
+    measure = ImageDraw.Draw(Image.new("L", (1, 1), 0))
+    bounds = measure.multiline_textbbox(
+        (0, 0), content, font=font, spacing=spacing, align=options.text_align)
+    tw = int(np.ceil(bounds[2] - bounds[0]))
+    th = int(np.ceil(bounds[3] - bounds[1]))
+    if tw <= 0 or th <= 0:
         raise ValueError("Введите непустую надпись.")
-    if tw > 8000 or th > 1000:
+    if tw > 8000 or th > 8000:
         raise ValueError("Надпись слишком большая.")
     img = Image.new("L", (tw + 16, th + 16), 0)
     draw = ImageDraw.Draw(img)
-    draw.text((8 - bounds[0], 8 - bounds[1]), options.text, font=font, fill=255)
+    draw.multiline_text(
+        (8 - bounds[0], 8 - bounds[1]), content, font=font,
+        spacing=spacing, align=options.text_align, fill=255)
     mask = np.asarray(img) >= 100
     ink = polygons_from_mask(mask, preserve_holes=True)
     # Pixel-space image has Y-down coordinates; polygons_from_mask already flips Y.
