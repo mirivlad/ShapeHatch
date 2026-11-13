@@ -1,12 +1,12 @@
-"""Contour-relative snap anchors and printable flat/upright keyring mounts."""
+"""Contour-snap anchors and flat loops or cross-drilled cylindrical posts."""
 from math import hypot
 import numpy as np
 import trimesh
-from shapely.geometry import LineString, Point, box
+from shapely.geometry import LineString, Point
 from shapely.geometry.polygon import orient
 from shapely.ops import unary_union
 
-from .geometry import extrude, polygons
+from .geometry import polygons
 from .schemas import MeshPart
 
 
@@ -51,6 +51,13 @@ def mount_placement(line: LineString, fraction: float | None,
     f = _side_fraction(line, side, position) if fraction is None else fraction % 1.0
     d = f * line.length
     anchor = line.interpolate(d)
+    # At an exact polygon vertex both possible face normals are valid.
+    # Offset by only a few microns along the same contour to avoid unstable
+    # boolean intersections at a shared vertex/coplanar segment junction.
+    if any((anchor.x - x) ** 2 + (anchor.y - y) ** 2 < 1e-12
+           for x, y in line.coords):
+        d = (d + max(0.002, line.length * 0.00001)) % line.length
+        anchor = line.interpolate(d)
     eps = min(0.25, line.length / 1000)
     before = line.interpolate((d - eps) % line.length)
     after = line.interpolate((d + eps) % line.length)
@@ -101,37 +108,60 @@ def _mesh(part: MeshPart) -> trimesh.Trimesh:
 def upright_eyelet(anchor: Point, normal: tuple[float, float],
                    tangent: tuple[float, float], thickness: float,
                    hole: float, wall: float, color: str) -> MeshPart:
-    """Vertical annular plate: hole axis is tangent to the outline.
+    """A rounded cross-drilled peg projecting along the outside XY normal.
 
-    A broad foot intersects the host plate in real volume so the manifold
-    union makes one printable solid, not overlapping disconnected meshes.
+    Construct and drill in local coordinates for numerical stability at
+    arbitrary contour angles, then rotate the finished solid onto the edge.
+    Local X is the outward axis, local Y the contour tangent, and Z is depth.
+    The bore axis is local Y (visible from the side of the keychain).
     """
     inner = hole / 2
     outer = inner + wall
-    # Local X: outwards from contour. Local Y: physical model Z.
-    center_s = -wall * 0.65
-    center_z = thickness + inner + wall * 0.45
-    outline = Point(center_s, center_z).buffer(outer, quad_segs=48)
-    opening = Point(center_s, center_z).buffer(inner, quad_segs=48)
-    leg_bottom = max(0.15, thickness * 0.25)
-    leg_top = thickness + wall * 0.20
-    foot = box(center_s - outer * 0.53, leg_bottom,
-               center_s + outer * 0.40, leg_top)
-    section = unary_union([outline, foot]).difference(opening)
-    tangential_width = max(2.0, min(4.0, wall * 1.4))
-    local = extrude(section, -tangential_width / 2, tangential_width / 2,
-                    "Перпендикулярная петелька", color)
+    diameter = 2 * outer
+    # Leave a tiny sub-nozzle clearance from the plate's coplanar Z surfaces.
+    # Exact coincident cylinder/plate faces can create non-manifold boolean edges.
+    peg_radius = outer - 0.04
+    if abs(thickness - diameter) > 1e-4:
+        raise ValueError("Толщина брелка должна совпадать с диаметром столбика.")
+
+    cap_s = outer * 1.25
+    root_s = -outer * 1.3
+    center_z = outer
+
+    def cylinder(radius: float, length: float, axis: tuple[float, float, float],
+                 center: tuple[float, float, float]):
+        result = trimesh.creation.cylinder(radius=radius, height=length, sections=48)
+        result.apply_transform(trimesh.geometry.align_vectors((0, 0, 1), axis))
+        result.apply_translation(center)
+        return result
+
+    shaft = cylinder(peg_radius, cap_s - root_s, (1, 0, 0),
+                     ((cap_s + root_s) / 2, 0, center_z))
+    cap_center = (cap_s, 0, center_z)
+    round_cap = trimesh.creation.icosphere(subdivisions=3, radius=peg_radius)
+    round_cap.apply_translation(cap_center)
+    cross_hole = cylinder(inner, diameter * 3, (0, 1, 0), cap_center)
+
+    try:
+        solid = trimesh.boolean.union([shaft, round_cap], engine="manifold")
+        solid = trimesh.boolean.difference([solid, cross_hole], engine="manifold")
+    except Exception as exc:
+        raise ValueError("Не удалось построить поперечное отверстие столбика.") from exc
+    if solid is None or not solid.is_watertight or solid.volume <= 0:
+        raise ValueError("Столбик не удалось построить как замкнутую модель.")
+
     nx, ny = normal
     tx, ty = tangent
-    vertices = [
+    verts = [
         [anchor.x + nx * s + tx * along,
          anchor.y + ny * s + ty * along, z]
-        for s, z, along in local.vertices
+        for s, along, z in solid.vertices
     ]
-    # The local-to-world transform mirrors winding; flip every triangle.
-    faces = [[a, c, b] for a, b, c in local.faces]
-    return MeshPart(name=local.name, color=color, vertices=vertices, faces=faces)
-
+    return MeshPart(
+        name="Столбик с поперечным отверстием", color=color,
+        vertices=[[round(float(c), 6) for c in v] for v in verts],
+        faces=solid.faces.tolist(),
+    )
 
 def combine_upright(parts: list[MeshPart], ear: MeshPart,
                     count_base: int, name: str, color: str) -> list[MeshPart]:

@@ -239,8 +239,11 @@ export function App() {
      <div className="settings-group"><h3><Settings2 size={18}/> Размеры</h3>
       <div className="field-row"><NumberInput label="Ширина, мм" value={silhouette.width_mm} min={10} max={300}
        onChange={v=>changeSilhouette("width_mm",v)}/>
-      <NumberInput label="Толщина, мм" value={silhouette.thickness_mm} min={0.6} max={25}
-       onChange={v=>changeSilhouette("thickness_mm",v)}/></div>
+      {silhouette.attach_loop && silhouette.loop_orientation==="upright"
+       ?<label className="field"><span>Толщина брелка, мм (авто)</span>
+         <input type="number" disabled readOnly value={Number((silhouette.loop_hole_mm+2*silhouette.loop_wall_mm).toFixed(2))}/></label>
+       :<NumberInput label="Толщина, мм" value={silhouette.thickness_mm} min={0.6} max={25}
+         onChange={v=>changeSilhouette("thickness_mm",v)}/>}</div>
       <ColorInput label="Цвет изделия" value={silhouette.color} onChange={v=>changeSilhouette("color",v)}/>
      </div>
      <div className="settings-group"><h3><Layers3 size={18}/> Петелька для кольца</h3>
@@ -248,8 +251,12 @@ export function App() {
       {silhouette.attach_loop&&<>
        <OptionSelect label="Ориентация петельки" value={silhouette.loop_orientation??"flat"}
         options={[{value:"flat",label:"В плоскости брелка"},
-         {value:"upright",label:"Перпендикулярная"}]}
+         {value:"upright",label:"Столбик с поперечным отверстием"}]}
         onChange={v=>changeSilhouette("loop_orientation",v as Silhouette["loop_orientation"])}/>
+       {silhouette.loop_orientation==="upright"&&<p className="mount-instructions">
+        Столбик выступает за край брелка. Отверстие проходит сбоку, параллельно поверхности.
+        Толщина брелка автоматически равна диаметру столбика.
+       </p>}
        <p className="mount-instructions">Перетащите бирюзовый маркер на 3D-модели — он прилипает к внешнему контуру.</p>
        <label className="field"><span>Точное положение по контуру: {Math.round(100*(silhouette.loop_contour_t??model?.mount_fraction??0))}%</span>
         <input type="range" min={0} max={1} step={0.001}
@@ -273,7 +280,11 @@ export function App() {
        <NumberInput label="Высота, мм" value={plate.height_mm} min={12} max={200} onChange={v=>changePlate("height_mm",v)}/>
       </div>
       <div className="field-row">
-       <NumberInput label="Толщина, мм" value={plate.thickness_mm} min={0.8} max={25} onChange={v=>changePlate("thickness_mm",v)}/>
+       {plate.mount_type==="upright"
+        ?<label className="field"><span>Толщина основы, мм (авто)</span>
+          <input type="number" disabled readOnly value={Number((plate.mount_hole_mm+2*plate.mount_wall_mm).toFixed(2))}/></label>
+        :<NumberInput label="Толщина, мм" value={plate.thickness_mm} min={0.8} max={25}
+          onChange={v=>changePlate("thickness_mm",v)}/>}
        {plate.shape==="rounded"&&<NumberInput label="Радиус углов, мм" value={plate.corner_radius_mm} min={0} max={50}
         onChange={v=>changePlate("corner_radius_mm",v)}/>}
       </div>
@@ -282,9 +293,13 @@ export function App() {
      <div className="settings-group"><h3><Layers3 size={18}/> Крепление для кольца</h3>
       <OptionSelect label="Тип крепления" value={plate.mount_type??"none"}
        options={[{value:"none",label:"Без крепления"},{value:"hole",label:"Отверстие в плашке"},
-        {value:"loop",label:"Петелька в плоскости"},{value:"upright",label:"Петелька перпендикулярно"}]}
+        {value:"loop",label:"Петелька в плоскости"},{value:"upright",label:"Столбик с поперечным отверстием"}]}
        onChange={v=>changePlate("mount_type",v as Plate["mount_type"])}/>
       {plate.mount_type!=="none"&&<>
+       {plate.mount_type==="upright"&&<p className="mount-instructions">
+        Закруглённый столбик с поперечным отверстием выступает за контур.
+        Толщина основы автоматически подгоняется под диаметр столбика.
+       </p>}
        <p className="mount-instructions">Перетащите бирюзовый маркер прямо по контуру модели.</p>
        <label className="field"><span>Точное положение по контуру: {Math.round(100*(plate.mount_contour_t??model?.mount_fraction??0))}%</span>
         <input type="range" min={0} max={1} step={0.001}
@@ -295,7 +310,8 @@ export function App() {
          min={2} max={12} onChange={v=>changePlate("mount_hole_mm",v)}/>
         <NumberInput label="Толщина стенки, мм" value={plate.mount_wall_mm}
          min={1} max={6} onChange={v=>changePlate("mount_wall_mm",v)}/>
-       </div><small className="field-hint">Два положения ушка: в плоскости или перпендикулярно ей. Отверстие внутри плашки — сквозное.</small>
+       </div><small className="field-hint">Плоская петелька имеет отверстие на лицевой стороне.
+        У столбика отверстие видно сбоку. Сквозное отверстие внутри основы остаётся отдельным режимом.</small>
       </>}
      </div>
      <div className="settings-group"><h3><Type size={18}/> Надпись</h3>

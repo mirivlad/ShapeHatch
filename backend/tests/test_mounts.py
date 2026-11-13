@@ -58,9 +58,18 @@ class MountsTests(unittest.TestCase):
                         self.assert_solid(result.parts[0])
                         self.assertEqual(len(result.mount_contour), 385)
                         self.assertAlmostEqual(result.mount_fraction, fraction)
-                        self.assertEqual(result.mount_surface_z, plate.thickness_mm)
+                        expected_thickness = (
+                            plate.mount_hole_mm + 2 * plate.mount_wall_mm
+                            if style == "upright" else plate.thickness_mm)
+                        self.assertAlmostEqual(result.mount_surface_z, expected_thickness)
                         if style == "upright":
-                            self.assertGreater(result.size_mm[2], plate.thickness_mm + 4)
+                            body = self.assert_solid(result.parts[0])
+                            self.assertEqual(body.euler_number, 0)  # one transverse hole
+                            self.assertAlmostEqual(body.bounds[0, 2], 0, delta=0.001)
+                            self.assertAlmostEqual(body.bounds[1, 2], expected_thickness, delta=0.001)
+                            self.assertAlmostEqual(result.size_mm[2],
+                                                   expected_thickness + plate.text_depth_mm,
+                                                   delta=0.05)
 
     def test_inlay_engraving_and_raised_upright(self):
         for text_style in ("raised", "inlay", "engraved"):
@@ -92,7 +101,37 @@ class MountsTests(unittest.TestCase):
                     if position is not None:
                         self.assertAlmostEqual(preview.mount_fraction, position)
                     if orientation == "upright":
-                        self.assertGreater(preview.size_mm[2], opts.thickness_mm + 4)
+                        expected_thickness = opts.loop_hole_mm + 2 * opts.loop_wall_mm
+                        self.assertAlmostEqual(preview.size_mm[2], expected_thickness,
+                                               delta=0.001)
+                        self.assertEqual(self.assert_solid(preview.parts[0]).euler_number, 0)
+
+    def test_post_is_edge_mounted_and_flush_with_both_faces(self):
+        plate = PlateOptions(text="А", shape="rectangle", width_mm=80, height_mm=36,
+                             thickness_mm=2.5, mount_type="upright", mount_side="top",
+                             mount_position=0.5, mount_hole_mm=5, mount_wall_mm=2.3)
+        result = generate(GenerateRequest(kind="plate", plate=plate))
+        body = self.assert_solid(result.parts[0])
+        nominal_diameter = plate.mount_hole_mm + 2 * plate.mount_wall_mm
+        self.assertAlmostEqual(body.bounds[0, 2], 0, delta=0.001)
+        self.assertAlmostEqual(body.bounds[1, 2], nominal_diameter, delta=0.001)
+        self.assertAlmostEqual(result.mount_surface_z, nominal_diameter)
+        self.assertGreater(body.bounds[1, 1], plate.height_mm / 2 + nominal_diameter * 0.9)
+        self.assertEqual(body.euler_number, 0)
+
+    def test_post_handles_corners_and_different_diameters(self):
+        for shape in ("rounded", "rectangle", "hexagon"):
+            for fraction in (0, 0.001, 0.5, 0.999, 1):
+                for hole, wall in ((3, 1.4), (5, 2.3)):
+                    with self.subTest(shape=shape, fraction=fraction, hole=hole):
+                        opts = PlateOptions(text="А", shape=shape, mount_type="upright",
+                                            mount_contour_t=fraction,
+                                            mount_hole_mm=hole, mount_wall_mm=wall)
+                        result = generate(GenerateRequest(kind="plate", plate=opts))
+                        base = self.assert_solid(result.parts[0])
+                        self.assertEqual(base.euler_number, 0)
+                        self.assertAlmostEqual(base.bounds[1, 2], hole + 2 * wall,
+                                               delta=0.001)
 
     def test_mount_off_and_legacy_hole(self):
         plain = generate(GenerateRequest(kind="plate", plate=PlateOptions(text="А")))

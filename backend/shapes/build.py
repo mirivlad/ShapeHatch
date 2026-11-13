@@ -13,28 +13,35 @@ def generate(request: GenerateRequest) -> Preview:
         if request.silhouette is None:
             raise ValueError("Не заданы параметры силуэта.")
         options = request.silhouette
+        upright = options.attach_loop and options.loop_orientation == "upright"
+        effective_thickness = (options.loop_hole_mm + 2 * options.loop_wall_mm
+                               if upright else options.thickness_mm)
+        geometry_options = options.model_copy(
+            update={"thickness_mm": effective_thickness, "attach_loop": False})
         shape = trace_silhouette(options)
         outline = primary_outline(shape)
         if options.attach_loop:
             anchor, normal, tangent, current_fraction = mount_placement(
                 outline, options.loop_contour_t, options.loop_side, options.loop_position)
-            if options.loop_orientation == "upright":
-                parts, warnings = silhouette_parts(
-                    shape, options.model_copy(update={"attach_loop": False}))
-                ear = upright_eyelet(anchor, normal, tangent, options.thickness_mm,
+            if upright:
+                parts, warnings = silhouette_parts(shape, geometry_options)
+                ear = upright_eyelet(anchor, normal, tangent, effective_thickness,
                                     options.loop_hole_mm, options.loop_wall_mm, options.color)
                 parts = combine_upright(parts, ear, 1, "Силуэт с петелькой", options.color)
             else:
                 shape = flat_mount(shape, anchor, normal,
                                    options.loop_hole_mm, options.loop_wall_mm, "loop")
-                parts, warnings = silhouette_parts(
-                    shape, options.model_copy(update={"attach_loop": False}))
+                parts, warnings = silhouette_parts(shape, geometry_options)
         else:
-            parts, warnings = silhouette_parts(shape, options)
+            parts, warnings = silhouette_parts(shape, geometry_options)
     elif request.kind == "plate":
         if request.plate is None:
             raise ValueError("Не заданы параметры плашки.")
         options = request.plate
+        upright = options.mount_type == "upright"
+        effective_thickness = (options.mount_hole_mm + 2 * options.mount_wall_mm
+                               if upright else options.thickness_mm)
+        geometry_options = options.model_copy(update={"thickness_mm": effective_thickness})
         shape = plate_shape(options)
         outline = primary_outline(shape)
         if options.mount_type != "none":
@@ -46,9 +53,9 @@ def generate(request: GenerateRequest) -> Preview:
         text = text_geometry(options)
         if not shape.buffer(-0.25).covers(text):
             raise ValueError("Надпись выходит за границы основы или пересекает отверстие. Измените размеры или положение.")
-        parts, warnings = plate_parts(shape, text, options)
-        if options.mount_type == "upright":
-            ear = upright_eyelet(anchor, normal, tangent, options.thickness_mm,
+        parts, warnings = plate_parts(shape, text, geometry_options)
+        if upright:
+            ear = upright_eyelet(anchor, normal, tangent, effective_thickness,
                                 options.mount_hole_mm, options.mount_wall_mm, options.base_color)
             parts = combine_upright(parts, ear, 1 if options.text_style == "raised" else 2,
                                     "Основа с перпендикулярной петелькой", options.base_color)
@@ -65,4 +72,4 @@ def generate(request: GenerateRequest) -> Preview:
         raise ValueError("Модель слишком сложна; уменьшите детализацию изображения.")
     return Preview(parts=parts, size_mm=[round(v, 2) for v in bounds], warnings=warnings,
                    mount_contour=contour_samples(outline), mount_fraction=current_fraction,
-                   mount_surface_z=options.thickness_mm)
+                   mount_surface_z=effective_thickness)
