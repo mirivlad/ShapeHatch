@@ -276,6 +276,26 @@ export function App() {
       </div>
       <ColorInput label="Цвет основы" value={plate.base_color} onChange={v=>changePlate("base_color",v)}/>
      </div>
+     <div className="settings-group"><h3><Layers3 size={18}/> Крепление для кольца</h3>
+      <OptionSelect label="Тип крепления" value={plate.mount_type??"none"}
+       options={[{value:"none",label:"Без крепления"},{value:"hole",label:"Отверстие в плашке"},
+        {value:"loop",label:"Ушко снаружи"}]}
+       onChange={v=>changePlate("mount_type",v as Plate["mount_type"])}/>
+      {plate.mount_type!=="none"&&<><OptionSelect label="Сторона" value={plate.mount_side}
+       options={[{value:"top",label:"Сверху"},{value:"bottom",label:"Снизу"},
+        {value:"left",label:"Слева"},{value:"right",label:"Справа"}]}
+       onChange={v=>changePlate("mount_side",v as Plate["mount_side"])}/>
+       <label className="field"><span>Положение вдоль стороны: {Math.round(plate.mount_position*100)}%</span>
+        <input type="range" min={0} max={1} step={0.01} value={plate.mount_position}
+         onChange={e=>changePlate("mount_position",Number(e.target.value))}/></label>
+       <div className="field-row">
+        <NumberInput label="Диаметр отверстия, мм" value={plate.mount_hole_mm}
+         min={2} max={12} onChange={v=>changePlate("mount_hole_mm",v)}/>
+        <NumberInput label="Толщина стенки, мм" value={plate.mount_wall_mm}
+         min={1} max={6} onChange={v=>changePlate("mount_wall_mm",v)}/>
+       </div><small className="field-hint">Кольцо располагается в плоскости плашки. Отверстие проходит насквозь.</small>
+      </>}
+     </div>
      <div className="settings-group"><h3><Type size={18}/> Надпись</h3>
       <label className="field"><span>Текст</span><textarea rows={4} maxLength={120} value={plate.text}
        onChange={e=>changePlate("text",e.target.value.replace(/\r\n?/g,"\n"))}/>
