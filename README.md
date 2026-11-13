@@ -19,7 +19,7 @@
     cd ShapeHatch
     docker compose up -d --build
 
-Open **http://localhost:8086** on the Docker host. By default the web service binds to **127.0.0.1**; publish securely behind an HTTPS reverse proxy, or change the binding knowingly.
+Open **http://192.168.1.54:8086** from another device in your local network (tomas). Docker publishes port 8086 on all host interfaces. For internet exposure, configure your own HTTPS reverse proxy and access controls.
 
 ## Development
 
