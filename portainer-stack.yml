@@ -1,0 +1,33 @@
+# Git stack: https://github.com/mirivlad/ShapeHatch
+# Branch: refs/heads/main, Compose path: portainer-stack.yml
+# Updates: Portainer > Stacks > shapehatch > Pull and redeploy
+services:
+  api:
+    image: ghcr.io/mirivlad/shapehatch-api:latest
+    pull_policy: always
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:size=128m
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128
+    mem_limit: 1g
+    cpus: "2.0"
+    networks:
+      - shapehatch
+
+  web:
+    image: ghcr.io/mirivlad/shapehatch-web:latest
+    pull_policy: always
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "${SHAPEHATCH_HTTP_PORT:-8086}:80"
+    networks:
+      - shapehatch
+
+networks:
+  shapehatch:
+    driver: bridge
