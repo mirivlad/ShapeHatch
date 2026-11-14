@@ -11,7 +11,7 @@ from shapes.schemas import GenerateRequest, PictureSettings
 from shapes.picture import picture_summary
 
 logger = logging.getLogger("shapehatch.geometry")
-app = FastAPI(title="ShapeHatch API", version="0.3.2")
+app = FastAPI(title="ShapeHatch API", version="0.3.3")
 # In production Nginx serves frontend + /api on one origin.
 app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173"],
                    allow_credentials=False, allow_methods=["GET", "POST"],
@@ -20,7 +20,7 @@ app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173"],
 
 @app.get("/api/health")
 def health():
-    return {"ok": True, "version": "0.3.2"}
+    return {"ok": True, "version": "0.3.3"}
 
 
 @app.post("/api/preview")

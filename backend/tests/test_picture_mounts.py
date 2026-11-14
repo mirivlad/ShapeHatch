@@ -158,6 +158,51 @@ class PictureMountTests(unittest.TestCase):
                 self.assertAlmostEqual(max(v[2] for v in part.vertices),0.4,delta=1e-5)
         self.assertEqual(len(result.text_bounds_mm),4)
 
+    def test_face_down_image_is_mirrored_in_3mf_but_not_2d_preview(self):
+        # Source: blue on the left, red on the right. Since the picture is
+        # printed on Z=0 (face-down), the XY geometry must be horizontally
+        # mirrored as viewed from the top of the printer. After the user
+        # turns the part over about Y, the face must read as the original.
+        picture=PictureSettings(image_data=sample(),resolution=24,
+                                color_count=2,fit_mode="manual",
+                                width_mm=40,x_mm=8,layer_mm=0.4)
+        indices, colors, url=optimized_picture(picture)
+        self.assertEqual(colors[int(indices[indices.shape[0]//2,0])],"#2244BB")
+        self.assertEqual(colors[int(indices[indices.shape[0]//2,-1])],"#EE3322")
+        bitmap=Image.open(io.BytesIO(base64.b64decode(url.split(",",1)[1])))
+        self.assertEqual(bitmap.getpixel((0,bitmap.height//2))[:3],(34,68,187))
+        self.assertEqual(bitmap.getpixel((bitmap.width-1,bitmap.height//2))[:3],(238,51,34))
+
+        model=plate(content_type="image",width_mm=90,height_mm=40,
+                    shape="rectangle",picture=picture)
+        images={part.color:part for part in model.parts if "Изображение" in part.name}
+        self.assertEqual(set(images),{"#2244BB","#EE3322"})
+        center=lambda part:(min(v[0] for v in part.vertices)+max(v[0] for v in part.vertices))/2
+        self.assertGreater(center(images["#2244BB"]),picture.x_mm)
+        self.assertLess(center(images["#EE3322"]),picture.x_mm)
+        for part in images.values():
+            self.assertAlmostEqual(min(v[2] for v in part.vertices),0,places=5)
+            self.assertAlmostEqual(max(v[2] for v in part.vertices),0.4,places=5)
+            volume(part)
+
+        # Check actual export, not just the intermediate preview parts.
+        with zipfile.ZipFile(io.BytesIO(make_3mf(model))) as archive:
+            root=ET.fromstring(archive.read("3D/3dmodel.model"))
+        materials=root.findall(f".//{{{CORE}}}basematerials/{{{CORE}}}base")
+        exported={}
+        for obj in root.findall(f".//{{{CORE}}}object"):
+            mesh=obj.find(f"{{{CORE}}}mesh")
+            if mesh is None:
+                continue
+            color=materials[int(obj.attrib["pindex"])].attrib["displaycolor"][:7]
+            if color not in images:
+                continue
+            xs=[float(node.attrib["x"]) for node in mesh.findall(
+                f"{{{CORE}}}vertices/{{{CORE}}}vertex")]
+            exported[color]=(min(xs)+max(xs))/2
+        self.assertGreater(exported["#2244BB"],picture.x_mm)
+        self.assertLess(exported["#EE3322"],picture.x_mm)
+
     def test_diagonal_touching_color_islands_form_closed_shells(self):
         # Disconnected color islands can meet at a vertex. Their walls must
         # remain separate indexed shells, not be merged into a non-manifold

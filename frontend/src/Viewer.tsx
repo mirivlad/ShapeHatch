@@ -85,7 +85,9 @@ function CameraController({ preview, view }: { preview: Preview | null; view: Ca
     c.position.copy(center).add(direction.multiplyScalar(distance));
     c.up.set(0,1,0);
     if (view==="front" || view==="back") c.up.set(0,0,1);
-    if (view==="bottom") c.up.set(0,-1,0);
+    // For the face-down image, the underside is viewed as if the finished
+    // part were flipped around its Y axis. Coupled with mirrored print
+    // geometry, this shows the original image left-to-right, not reversed.
     c.lookAt(center);
     // Orthographic Canvas default camera frustum is canvas width x height.
     c.zoom = Math.max(0.2, Math.min(size.width,size.height)/Math.max(extent.length()*1.5, 20));

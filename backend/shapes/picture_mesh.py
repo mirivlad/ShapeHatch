@@ -58,7 +58,7 @@ def _image_regions(image_data: str, algorithm: str, color_count: int,
     h,w=indices.shape
     cell_w=width_mm/w
     cell_h=height_mm/h
-    left=x_mm-width_mm/2
+    right=x_mm+width_mm/2
     bottom=y_mm-height_mm/2
     regions=[]
     for idx in range(len(colors)):
@@ -70,8 +70,12 @@ def _image_regions(image_data: str, algorithm: str, color_count: int,
                 start=x
                 while x<w and indices[y,x]==idx:x+=1
                 if start<x:
-                    x0=left+start*cell_w
-                    x1=left+x*cell_w
+                    # The picture is printed FACE-DOWN at z=0.
+                    # Mirror horizontally in printer (top-view) coordinates
+                    # so the finished part reads normally when turned over.
+                    # Do not mirror the raster used for the 2D palette preview.
+                    x0=right-x*cell_w
+                    x1=right-start*cell_w
                     y0=bottom+(h-y-1)*cell_h
                     y1=bottom+(h-y)*cell_h
                     spans.append(box(x0,y0,x1,y1))

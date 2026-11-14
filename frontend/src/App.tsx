@@ -286,7 +286,7 @@ export function App() {
    <button type="button" className="brand" onClick={()=>navigate("home")} aria-label="На главную">
     <div className="brand-icon"><Shapes size={23} strokeWidth={2.2}/></div>
     <span>Shape<span className="brand-accent">Hatch</span></span>
-    <span className="version">BETA 0.3.2</span>
+    <span className="version">BETA 0.3.3</span>
    </button>
    <nav className="top-nav">
     <button onClick={()=>navigate("home")} className={section==="home"?"active":""}>Главная</button>
@@ -534,8 +534,8 @@ export function App() {
       </div>
       <NumberInput label="Толщина цветного слоя, мм" value={plate.picture.layer_mm}
        min={0.2} max={2} step={0.1} onChange={v=>changePicture("layer_mm",v)}/>
-      <small className="field-hint">Картинка помещается на нижнюю лицевую поверхность
-       (Z=0). Выступающие за основу края обрезаются автоматически.</small>
+      <small className="field-hint">Для печати лицом вниз изображение автоматически
+       зеркалится в 3MF/STL. Вид «Снизу» показывает готовую лицевую сторону.</small>
      </section>}
      {pictureMode&&editorStep===3&&<section className="settings-group picture-editor">
       <h3><ImagePlus size={18}/> Цвета и оптимизация</h3>
