@@ -335,15 +335,6 @@ export function App() {
         options={[{value:"flat",label:"В плоскости брелка"},
          {value:"upright",label:"Столбик с поперечным отверстием"}]}
         onChange={v=>changeSilhouette("loop_orientation",v as Silhouette["loop_orientation"])}/>
-       {silhouette.loop_orientation==="upright"&&<p className="mount-instructions">
-        Столбик выступает за край брелка. Отверстие проходит сбоку, параллельно поверхности.
-        Толщина брелка автоматически равна диаметру столбика.
-       </p>}
-       <p className="mount-instructions">Перетащите бирюзовый маркер на 3D-модели — он прилипает к внешнему контуру.</p>
-       <label className="field"><span>Точное положение по контуру: {Math.round(100*(silhouette.loop_contour_t??model?.mount_fraction??0))}%</span>
-        <input type="range" min={0} max={1} step={0.001}
-         value={silhouette.loop_contour_t??model?.mount_fraction??0}
-         onChange={e=>changeSilhouette("loop_contour_t",Number(e.target.value))}/></label>
        <div className="field-row">
         <NumberInput label="Диаметр отверстия, мм" value={silhouette.loop_hole_mm} min={2} max={12}
          onChange={v=>changeSilhouette("loop_hole_mm",v)}/>
@@ -381,22 +372,12 @@ export function App() {
         {value:"loop",label:"Петелька в плоскости"},{value:"upright",label:"Столбик с поперечным отверстием"}]}
        onChange={v=>changePlate("mount_type",v as Plate["mount_type"])}/>
       {plate.mount_type!=="none"&&<>
-       {plate.mount_type==="upright"&&<p className="mount-instructions">
-        Закруглённый столбик с поперечным отверстием выступает за контур.
-        Толщина основы автоматически подгоняется под диаметр столбика.
-       </p>}
-       <p className="mount-instructions">Перетащите бирюзовый маркер прямо по контуру модели.</p>
-       <label className="field"><span>Точное положение по контуру: {Math.round(100*(plate.mount_contour_t??model?.mount_fraction??0))}%</span>
-        <input type="range" min={0} max={1} step={0.001}
-         value={plate.mount_contour_t??model?.mount_fraction??0}
-         onChange={e=>changePlate("mount_contour_t",Number(e.target.value))}/></label>
        <div className="field-row">
         <NumberInput label="Диаметр отверстия, мм" value={plate.mount_hole_mm}
          min={2} max={12} onChange={v=>changePlate("mount_hole_mm",v)}/>
         <NumberInput label="Толщина стенки, мм" value={plate.mount_wall_mm}
          min={1} max={6} onChange={v=>changePlate("mount_wall_mm",v)}/>
-       </div><small className="field-hint">Плоская петелька имеет отверстие на лицевой стороне.
-        У столбика отверстие видно сбоку. Сквозное отверстие внутри основы остаётся отдельным режимом.</small>
+       </div>
       </>}
      </Accordion>
      <Accordion title="Надпись" icon={Type} opened={openGroup==="text"} onToggle={()=>toggleGroup("text")}>
