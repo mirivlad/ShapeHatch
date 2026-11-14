@@ -75,6 +75,25 @@ class InnerContourTests(unittest.TestCase):
         with zipfile.ZipFile(io.BytesIO(make_stl_zip(colored))) as archive:
             self.assertEqual(len([x for x in archive.namelist() if x.endswith(".stl")]),3)
 
+    def test_line_art_cutouts_preserves_outer_body(self):
+        # A one-pixel border has a >90% white central area. It must not
+        # become a giant hole just because the user chose cutouts.
+        thin = svg_url("""<svg xmlns="http://www.w3.org/2000/svg" width="180" height="130">
+        <rect x="10" y="10" width="160" height="110"
+         fill="none" stroke="black" stroke-width="1"/>
+        <path d="M78 60 C63 39 40 54 54 72 L78 96 L102 72 C116 54 93 39 78 60Z"
+         fill="none" stroke="black" stroke-width="1"/>
+        </svg>""")
+        base = model(thin, mode="filled")
+        punched = model(thin, mode="cutouts")
+        self.assert_solid(base)
+        self.assert_solid(punched)
+        self.assertEqual(len(punched.inner_contours), 1)
+        self.assertEqual(punched.inner_contours[0].fill, "empty")
+        # Heart is a small detail; don't remove 95% of the model.
+        self.assertGreater(mesh(punched.parts[0]).volume,
+                           mesh(base.parts[0]).volume * 0.7)
+
     def test_filled_image_cutout_is_detected_even_when_filled(self):
         model_filled=model(CUTOUT)
         model_cutouts=model(CUTOUT,mode="cutouts")

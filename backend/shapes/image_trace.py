@@ -164,8 +164,11 @@ def trace_artwork(options: SilhouetteOptions):
 
             # Outline drawings have a near-full-size central white area.
             # Treat it as the solid body, and its black children as details.
-            is_outline_interior = (options.mode != "cutouts"
-                                   and hole.area > 0.60 * root.area)
+            # In a line drawing the white region inside the outer stroke
+            # occupies nearly the entire outline. It is the BODY, not a
+            # user-requested cutout, even when "cutouts" is selected.
+            # Smaller white holes of solid artwork remain editable cutouts.
+            is_outline_interior = hole.area > 0.90 * root.area
             if is_outline_interior:
                 detail = tree[child][2]
                 while detail != -1:
