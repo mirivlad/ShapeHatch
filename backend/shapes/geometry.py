@@ -1,5 +1,7 @@
 """2D shapes and watertight 3D extrusions without external triangulation binaries."""
 from math import cos, pi, sin
+from functools import lru_cache
+from shapely import wkb
 import numpy as np
 import trimesh
 from shapely import constrained_delaunay_triangles
@@ -21,8 +23,8 @@ def polygons(geometry):
     return []
 
 
-def extrude(geometry, z0: float, z1: float, name: str, color: str,
-            top_round_mm: float = 0.0, round_limit=None) -> MeshPart:
+def _compute_extrusion(geometry, z0: float, z1: float, name: str, color: str,
+                       top_round_mm: float = 0.0, round_limit=None) -> MeshPart:
     """Build a watertight extrusion with an optional true curved top edge.
 
     The upper edge is made from four offset profiles along a quarter circle.
@@ -129,6 +131,23 @@ def extrude(geometry, z0: float, z1: float, name: str, color: str,
         raise ValueError("Не удалось создать корректную сетку. Измените параметры скругления.")
     return MeshPart(name=name, color=color,
                     vertices=mesh.vertices.round(6).tolist(), faces=mesh.faces.tolist())
+
+
+@lru_cache(maxsize=16)
+def _cached_extrusion(geometry_wkb: bytes, z0: float, z1: float,
+                      radius: float, limit_wkb: bytes | None):
+    geometry = wkb.loads(geometry_wkb)
+    limit = wkb.loads(limit_wkb) if limit_wkb is not None else None
+    part = _compute_extrusion(geometry,z0,z1,"cache","#000000",radius,limit)
+    return part.vertices,part.faces
+
+
+def extrude(geometry, z0: float, z1: float, name: str, color: str,
+            top_round_mm: float = 0.0, round_limit=None) -> MeshPart:
+    """Reuse identical geometry across steps, independent of material and part name."""
+    vertices,faces=_cached_extrusion(geometry.wkb,round(z0,6),round(z1,6),
+        round(top_round_mm,6),round_limit.wkb if round_limit is not None else None)
+    return MeshPart(name=name,color=color,vertices=vertices,faces=faces)
 
 
 def ring_on_shape(shape, options: SilhouetteOptions):

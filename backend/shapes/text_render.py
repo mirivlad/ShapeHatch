@@ -1,5 +1,6 @@
 """Turn Cyrillic-capable text into 2D polygons at print scale."""
 from pathlib import Path
+from functools import lru_cache
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 from shapely import affinity
@@ -26,7 +27,24 @@ FONT_PATHS = {
 PIXELS_PER_MM = 8
 
 
+@lru_cache(maxsize=24)
+def _text_cached(content: str, font: str, font_size_mm: float,
+                 line_spacing_mm: float, text_align: str,
+                 text_x_mm: float, text_y_mm: float):
+    # Only layout parameters participate in text regeneration.
+    options=PlateOptions(text=content,font=font,font_size_mm=font_size_mm,
+        line_spacing_mm=line_spacing_mm,text_align=text_align,
+        text_x_mm=text_x_mm,text_y_mm=text_y_mm)
+    return _text_geometry_uncached(options)
+
+
 def text_geometry(options: PlateOptions):
+    return _text_cached(options.text,options.font,options.font_size_mm,
+                        options.line_spacing_mm,options.text_align,
+                        options.text_x_mm,options.text_y_mm)
+
+
+def _text_geometry_uncached(options: PlateOptions):
     # Preserve intentional line breaks; Windows and classic Mac pasted text are normalized.
     content = options.text.replace("\r\n", "\n").replace("\r", "\n")
     if not content.strip():

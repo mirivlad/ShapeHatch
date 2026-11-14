@@ -2,6 +2,7 @@
 import base64
 import io
 import re
+from functools import lru_cache
 
 import cairosvg
 import cv2
@@ -116,7 +117,7 @@ def _ring(contour):
     return [(float(p[0][0]), -float(p[0][1])) for p in contour]
 
 
-def trace_artwork(options: SilhouetteOptions):
+def _trace_artwork_uncached(options: SilhouetteOptions):
     """Recognize a solid outer contour and individually editable enclosed contours.
 
     RETR_TREE matters: thin line artwork has an enormous white region inside
@@ -221,6 +222,22 @@ def trace_artwork(options: SilhouetteOptions):
     enclosed.sort(key=lambda part: (-part.area, round(part.centroid.x, 3),
                                    round(part.centroid.y, 3)))
     return shape, [(f"inner-{i+1}", geo) for i, geo in enumerate(enclosed[:24])]
+
+
+@lru_cache(maxsize=8)
+def _trace_cached(image_data: str, width_mm: float, threshold: int,
+                  invert: bool, mode: str, smoothing_mm: float):
+    # Geometry-affecting parameters only: the mounting and material options
+    # deliberately do not invalidate the contour extraction.
+    opts=SilhouetteOptions(image_data=image_data,width_mm=width_mm,
+        threshold=threshold,invert=invert,mode=mode,smoothing_mm=smoothing_mm,
+        attach_loop=False)
+    return _trace_artwork_uncached(opts)
+
+
+def trace_artwork(options: SilhouetteOptions):
+    return _trace_cached(options.image_data,options.width_mm,options.threshold,
+                         options.invert,options.mode,options.smoothing_mm)
 
 
 def trace_silhouette(options: SilhouetteOptions):

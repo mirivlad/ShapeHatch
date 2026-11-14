@@ -8,10 +8,13 @@
 
 - Silhouette from PNG, JPG, WebP or SVG: filled or outline artwork, selectable enclosed regions (same material, inlaid second material, or through-holes), dimensions and thickness, flat loop or edge-mounted rounded post with a transverse ring hole.
 - Geometric upper-edge rounding, adjustable from 0 to 0.4 mm (default 0.3 mm), for silhouettes and plates.
+- **Plate wizard:** choose text or picture. The shared five-step wizard keeps all earlier steps editable. Only dependency-affected contours, text meshes, image regions and extrusion geometry are rebuilt (bounded per-worker caches).
+- **Multicolor image plates:** PNG/JPG/WebP/SVG, Median Cut, K-Means, nearest-color and Floyd–Steinberg palette optimization (2–16 colors), editable filament palette and live 2D comparison, independently printable color volumes on the **bottom** (Z=0) surface with adjustable color-layer thickness.
+- **Shared attachment wizard for plates and silhouettes:** no mount, through-hole, flat loop, transverse post or up to eight open magnet pockets. Round/rectangular pockets have adjustable dimensions, clearance, depth and per-pocket X/Y positions; move pockets in 3D. Picture plates have pockets on the rear (top) surface.
 - Text plates: five shapes; 12 Cyrillic-capable fonts (DejaVu, Russo One, Play Bold, PT Sans, Lobster, Rubik Mono One, Unbounded, Comfortaa, Terminus TTF); multiline text with left/center/right alignment and adjustable line spacing; optional through-hole, flat loop or cross-drilled mounting post; embossed, inlaid, engraved text; separate colors.
 - 3D viewer with mouse orbit, pan, zoom, orthographic camera shortcuts and orientation cube. Drag the turquoise handle to snap a mount to the real external contour; drag the orange handle to move plate lettering in X/Y.
-- STL, multipart STL ZIP, grouped multicolor 3MF.
-- Single-open accordion settings in the editor (the first section opens by default); ring-hole diameter and wall thickness retained between new projects in browser localStorage.
+- STL, multipart STL ZIP, grouped multicolor 3MF. Core-spec material resources now use the correct namespace, with named parts and per-object palette indexes.
+- Per-step editing with back/next and direct step navigation; ring-hole diameter and wall thickness retained between new projects in browser localStorage.
 - Local editable gallery powered by IndexedDB (no account, no server-side gallery yet).
 - Install with Docker Compose for development, or the ready-made [Portainer Git stack](docs/PORTAINER.md) using GHCR images for manual Pull and redeploy.
 
@@ -53,13 +56,13 @@ Run backend tests in the API container:
 
 ## Notes
 
-- **3MF** has grouped colored components. A slicer must still map materials to filaments. Use **STL ZIP** if grouped colors are unsupported. Plain **STL is colorless**.
+- **3MF** uses the standards-compliant core <basematerials> resource and named colored components. Individual slicers may still require **manual assignment of objects to actual filaments/AMS slots**; generic 3MF material display colors are not printer-specific filament assignments. Use **STL ZIP** if grouped colors are unsupported. Plain **STL is colorless**.
 - Models are validated for watertight geometry. For the cross-drilled post, model thickness is set automatically to the nominal post diameter (hole diameter + twice the wall thickness). Thin walls and details may still be unprintable; real printer tests are required.
 - The gallery is **local browser storage**, not a public multi-user service. Clearing browser data destroys locally saved projects.
 - SVG sanitization is intentionally strict; external resources and active scripts are rejected. Keep the API isolated and resource-limited.
 - The eight extra bundled fonts are licensed under SIL OFL 1.1; see [font attribution and license copies](backend/fonts/README.md). Text with narrow strokes (especially Terminus) must be verified before printing.
 
-Roadmap: shared gallery, multiple text objects, model thumbnails, new generators (vases/boxes/housings), slicer validation.
+Roadmap: multi-printer slicer validation, image placement fit/fill options, magnetic encapsulation with pause-at-layer instructions, shared gallery, multiple text objects, model thumbnails, box generator.
 
 ## License
 

@@ -108,3 +108,35 @@ background:#eff8f3;border:1px solid #cee5da;border-radius:8px;margin:10px 0}
 .contour-marker{height:23px;width:23px;border-radius:6px;background:#e0f1e8;color:#2c7d65;display:grid;place-items:center;font-size:12px}
 .contour-row .field{margin:8px 0}
 .contour-row .color-field{max-width:220px}
+
+/* Non-linear wizard: every step remains editable. */
+.wizard-steps{display:flex;gap:5px;overflow-x:auto;margin-top:14px;padding-bottom:5px;scrollbar-width:thin}
+.wizard-steps button{flex:0 0 75px;display:flex;align-items:center;flex-direction:column;justify-content:center;gap:5px;padding:8px 4px;background:#f5f8f7;border:1px solid #e1eeeb;color:#7b9292;border-radius:9px;font-weight:700;font-size:10px;line-height:1.3}
+.wizard-steps button.active{color:#217a63;background:#e3f6ed;border-color:#7dc6ac}
+.wizard-steps button span{height:23px;width:23px;border-radius:50%;background:white;display:grid;place-items:center;font-size:12px}
+.wizard-steps button.active span{background:#2f9177;color:white}
+.wizard-navigation{flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:7px;padding:10px 15px;border-top:1px solid #e5eded;background:#fbfdfc}
+.wizard-navigation button{display:flex;align-items:center;gap:4px;border:0;border-radius:8px;color:#2b816b;background:#e7f4eb;padding:9px;font-size:12px;font-weight:750}
+.wizard-navigation span{font-size:11px;color:#869999}
+.next-arrow{transform:rotate(-90deg)}
+.content-choice h3{line-height:1.4}
+.content-choice-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.content-choice-grid button{display:flex;flex-direction:column;align-items:flex-start;gap:6px;padding:13px;border:1px solid #dbe9e2;border-radius:10px;background:#fbfdfc;color:#3c7970;text-align:left}
+.content-choice-grid button.selected{background:#e5f7ee;border-color:#65b396}
+.content-choice-grid button strong{font-size:13px}
+.content-choice-grid button span{font-size:10px;line-height:1.5;color:#78918e}
+.picture-editor h3,.wizard-mount h3{margin-bottom:12px}
+.picture-comparison{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:15px 0}
+.picture-comparison>div{min-width:0;display:flex;flex-direction:column;gap:6px;border:1px solid #dde8e4;background:#f2f7f4;border-radius:9px;padding:8px}
+.picture-comparison strong{font-size:11px;color:#6f8c83}
+.picture-comparison img{display:block;object-fit:contain;width:100%;height:132px;background:white;border-radius:5px}
+.picture-comparison>div:last-child img{image-rendering:pixelated}
+.palette-override{border-bottom:1px solid #eef3f0;padding:3px 0}
+.magnet-list-header{display:flex;align-items:center;justify-content:space-between;margin:14px 0 7px;gap:8px;font-size:12px;color:#345c58}
+.magnet-list-header button{display:flex;align-items:center;gap:4px;padding:6px 9px;border:0;background:#e7f4eb;color:#337b64;border-radius:7px;font-size:11px}
+.magnet-position-row{display:grid;grid-template-columns:23px 1fr 1fr 29px;align-items:end;gap:6px;padding:7px 0;border-bottom:1px solid #edf2f0}
+.magnet-position-row>span{font-size:11px;font-weight:800;color:#8a9b99;padding-bottom:11px}
+.magnet-position-row .field{margin:0;font-size:10px;gap:3px}
+.magnet-position-row .field input{padding:7px 4px;font-size:12px}
+.magnet-position-row .remove-magnet{border:0;background:#fcf0ed;color:#b97158;border-radius:6px;width:28px;height:33px;display:grid;place-items:center}
+.export-help p{font-size:12px}

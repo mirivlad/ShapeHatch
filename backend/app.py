@@ -5,9 +5,10 @@ from pydantic import BaseModel
 
 from shapes.build import generate
 from shapes.exporter import make_3mf, make_stl, make_stl_zip
-from shapes.schemas import GenerateRequest
+from shapes.schemas import GenerateRequest, PictureSettings
+from shapes.picture import picture_summary
 
-app = FastAPI(title="ShapeHatch API", version="0.2.0")
+app = FastAPI(title="ShapeHatch API", version="0.3.0")
 # In production Nginx serves frontend + /api on one origin.
 app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173"],
                    allow_credentials=False, allow_methods=["GET", "POST"],
@@ -16,7 +17,7 @@ app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173"],
 
 @app.get("/api/health")
 def health():
-    return {"ok": True, "version": "0.2.0"}
+    return {"ok": True, "version": "0.3.0"}
 
 
 @app.post("/api/preview")
@@ -41,5 +42,13 @@ def export(request: GenerateRequest, format: str):
             data, mime, ext = make_stl_zip(model), "application/zip", "zip"
         return Response(content=data, media_type=mime,
                         headers={"Content-Disposition": f'attachment; filename="shapehatch.{ext}"'})
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+
+
+@app.post("/api/picture/preview")
+def picture_preview(options: PictureSettings):
+    try:
+        return picture_summary(options)
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error

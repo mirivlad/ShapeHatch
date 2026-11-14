@@ -136,9 +136,8 @@ class ShapeHatchModels(unittest.TestCase):
             self.assertIn("3D/3dmodel.model", names)
             root = ET.fromstring(z.read("3D/3dmodel.model"))
             self.assertEqual(root.attrib["unit"], "millimeter")
-            ns = {"c": "http://schemas.microsoft.com/3dmanufacturing/core/2015/02",
-                  "m": "http://schemas.microsoft.com/3dmanufacturing/material/2015/02"}
-            self.assertEqual(len(root.findall(".//m:base", ns)), 2)
+            ns = {"c": "http://schemas.microsoft.com/3dmanufacturing/core/2015/02"}
+            self.assertEqual(len(root.findall(".//c:base", ns)), 2)
             self.assertEqual(len(root.findall(".//c:build/c:item", ns)), 1)
         with zipfile.ZipFile(io.BytesIO(make_stl_zip(result))) as z:
             self.assertEqual(len([p for p in z.namelist() if p.endswith(".stl")]), 2)

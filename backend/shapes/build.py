@@ -1,101 +1,117 @@
-"""Generate watertight printable meshes and perimeter-based drag anchors."""
+"""Composable ShapeHatch generator: shared attachments, image/text branches.
+
+Each mesh is cached by its precise geometry/parameters in geometry.extrude;
+the image optimizer likewise caches the unchanged raster stage. Returning to
+an earlier wizard step invalidates only parts whose inputs really changed.
+"""
+from shapely.ops import unary_union
+
+from .attachments import prepare_mount, mount_spec, finish_post, cut_magnet_pockets
 from .geometry import plate_parts, plate_shape, silhouette_parts
 from .image_trace import trace_artwork
-from .mounts import (combine_upright, contour_samples, flat_mount, mount_placement,
-                     primary_outline, upright_eyelet)
+from .mounts import contour_samples
+from .picture_mesh import image_plate_parts
+from .picture import optimized_picture
 from .schemas import GenerateRequest, Preview, InnerContourPreview
 from .text_render import text_geometry
 
 
-def generate(request: GenerateRequest) -> Preview:
-    current_fraction = None
-    text_bounds = None
-    text_surface_z = 0.0
-    inner_previews = []
-    if request.kind == "silhouette":
+def generate(request:GenerateRequest)->Preview:
+    current_fraction=None
+    text_bounds=None
+    text_surface_z=0.0
+    image_preview=None
+    image_palette=[]
+    inner_previews=[]
+    magnet_positions=[]
+    magnet_surface_z=0.0
+    if request.kind=="silhouette":
         if request.silhouette is None:
             raise ValueError("Не заданы параметры силуэта.")
-        options = request.silhouette
-        upright = options.attach_loop and options.loop_orientation == "upright"
-        effective_thickness = (options.loop_hole_mm + 2 * options.loop_wall_mm
-                               if upright else options.thickness_mm)
-        geometry_options = options.model_copy(
-            update={"thickness_mm": effective_thickness, "attach_loop": False})
-        shape, enclosed = trace_artwork(options)
-        styles = {item.id: item for item in options.inner_contours}
-        voids = []
-        colored = []
-        for contour_id, area in enclosed:
-            item = styles.get(contour_id)
-            fill = item.fill if item else ("empty" if options.mode == "cutouts" else "same")
-            if fill == "empty":
-                voids.append(area)
-            elif fill == "other":
-                colored.append((area, item.color))
-            # The area is already inside the fully filled exterior silhouette.
-            if hasattr(area, "exterior"):
-                points = [[round(float(x), 3), round(float(y), 3)]
-                          for x, y in list(area.exterior.coords)[:-1]]
-                inner_previews.append(InnerContourPreview(
-                    id=contour_id, points=points, fill=fill))
+        opts=request.silhouette
+        mode,hole,wall,*_=mount_spec(opts,True)
+        effective=(hole+2*wall if mode=="upright" else opts.thickness_mm)
+        geo_opts=opts.model_copy(update={"thickness_mm":effective,"attach_loop":False})
+        shape,enclosed=trace_artwork(opts)
+        styles={x.id:x for x in opts.inner_contours}
+        voids=[]
+        colored=[]
+        for contour_id,area in enclosed:
+            choice=styles.get(contour_id)
+            fill=choice.fill if choice else ("empty" if opts.mode=="cutouts" else "same")
+            if fill=="empty":voids.append(area)
+            elif fill=="other":colored.append((area,choice.color))
+            if hasattr(area,"exterior"):
+                points=[[round(float(x),3),round(float(y),3)]
+                        for x,y in list(area.exterior.coords)[:-1]]
+                inner_previews.append(InnerContourPreview(id=contour_id,points=points,fill=fill))
         if voids:
-            from shapely.ops import unary_union
-            shape = shape.difference(unary_union(voids)).buffer(0)
-        outline = primary_outline(shape)
-        if options.attach_loop:
-            anchor, normal, tangent, current_fraction = mount_placement(
-                outline, options.loop_contour_t, options.loop_side, options.loop_position)
-            if upright:
-                parts, warnings = silhouette_parts(shape, geometry_options, colored)
-                ear = upright_eyelet(anchor, normal, tangent, effective_thickness,
-                                    options.loop_hole_mm, options.loop_wall_mm, options.color)
-                parts = combine_upright(parts, ear, 1, "Силуэт с петелькой", options.color)
-            else:
-                shape = flat_mount(shape, anchor, normal,
-                                   options.loop_hole_mm, options.loop_wall_mm, "loop")
-                parts, warnings = silhouette_parts(shape, geometry_options, colored)
-        else:
-            parts, warnings = silhouette_parts(shape, geometry_options, colored)
-    elif request.kind == "plate":
+            shape=shape.difference(unary_union(voids)).buffer(0)
+        shape,outline,current_fraction,attachment=prepare_mount(shape,opts,True)
+        parts,warnings=silhouette_parts(shape,geo_opts,colored)
+        parts=finish_post(parts,attachment,effective,opts.color,1)
+        if mode=="magnets":
+            parts=cut_magnet_pockets(parts,shape,opts.magnets,effective)
+            magnet_positions=[[p.x_mm,p.y_mm] for p in opts.magnets.positions]
+            magnet_surface_z=0
+    elif request.kind=="plate":
         if request.plate is None:
             raise ValueError("Не заданы параметры плашки.")
-        options = request.plate
-        upright = options.mount_type == "upright"
-        effective_thickness = (options.mount_hole_mm + 2 * options.mount_wall_mm
-                               if upright else options.thickness_mm)
-        geometry_options = options.model_copy(update={"thickness_mm": effective_thickness})
-        shape = plate_shape(options)
-        outline = primary_outline(shape)
-        if options.mount_type != "none":
-            anchor, normal, tangent, current_fraction = mount_placement(
-                outline, options.mount_contour_t, options.mount_side, options.mount_position)
-            if options.mount_type in ("hole", "loop"):
-                shape = flat_mount(shape, anchor, normal,
-                                   options.mount_hole_mm, options.mount_wall_mm, options.mount_type)
-        text = text_geometry(options)
-        text_bounds = [round(float(v), 3) for v in text.bounds]
-        text_surface_z = effective_thickness + (options.text_depth_mm if options.text_style == "raised" else 0)
-        if not shape.buffer(-max(0.25, geometry_options.top_round_mm + 0.1)).covers(text):
-            raise ValueError("Надпись выходит за границы основы или пересекает отверстие. Измените размеры или положение.")
-        parts, warnings = plate_parts(shape, text, geometry_options)
-        if upright:
-            ear = upright_eyelet(anchor, normal, tangent, effective_thickness,
-                                options.mount_hole_mm, options.mount_wall_mm, options.base_color)
-            parts = combine_upright(parts, ear, 1 if options.text_style == "raised" else 2,
-                                    "Основа с перпендикулярной петелькой", options.base_color)
-        if options.text_style == "engraved":
-            warnings.append("Для гравировки показан цвет основы: второй цвет не печатается.")
+        opts=request.plate
+        mode,hole,wall,*_=mount_spec(opts)
+        effective=(hole+2*wall if mode=="upright" else opts.thickness_mm)
+        geo_opts=opts.model_copy(update={"thickness_mm":effective})
+        shape=plate_shape(opts)
+        shape,outline,current_fraction,attachment=prepare_mount(shape,opts)
+        if opts.content_type=="image":
+            if not opts.picture.image_data:
+                raise ValueError("Загрузите изображение для таблички.")
+            parts,image_preview,image_palette=image_plate_parts(shape,geo_opts)
+            pixel_indices, _, _ = optimized_picture(opts.picture)
+            img_h, img_w = pixel_indices.shape
+            img_height = opts.picture.width_mm * img_h / img_w
+            text_bounds = [
+                round(opts.picture.x_mm-opts.picture.width_mm/2,3),
+                round(opts.picture.y_mm-img_height/2,3),
+                round(opts.picture.x_mm+opts.picture.width_mm/2,3),
+                round(opts.picture.y_mm+img_height/2,3)]
+            # Use the same drag handle below the face (Z=0), not on the rear.
+            text_surface_z=-1.35
+            warnings=[]
+            # The full plate body is first; the bottom picture is independent.
+            parts=finish_post(parts,attachment,effective,opts.base_color,1)
+        else:
+            text=text_geometry(opts)
+            text_bounds=[round(float(x),3) for x in text.bounds]
+            text_surface_z=effective+(opts.text_depth_mm if opts.text_style=="raised" else 0)
+            if not shape.buffer(-max(0.25,opts.top_round_mm+0.1)).covers(text):
+                raise ValueError("Надпись выходит за границы основы или пересекает отверстие.")
+            parts,warnings=plate_parts(shape,text,geo_opts)
+            parts=finish_post(parts,attachment,effective,opts.base_color,
+                              1 if opts.text_style=="raised" else 2)
+            if opts.text_style=="engraved":
+                warnings.append("Гравировка не добавляет второго материала.")
+        if mode=="magnets":
+            if opts.content_type=="text" and opts.text_style in ("inlay","engraved"):
+                if opts.magnets.depth_mm+opts.text_depth_mm>effective-0.6:
+                    raise ValueError("Магнитное углубление пересекается с гравировкой/вставкой.")
+            parts=cut_magnet_pockets(parts,shape,opts.magnets,effective,
+                 image_face_bottom=opts.content_type=="image",
+                 image_depth=opts.picture.layer_mm if opts.content_type=="image" else 0)
+            magnet_positions=[[p.x_mm,p.y_mm] for p in opts.magnets.positions]
+            magnet_surface_z=effective if opts.content_type=="image" else 0
     else:
         raise ValueError("Неизвестный генератор.")
 
-    coords = [v for part in parts for v in part.vertices]
-    if not coords:
-        raise ValueError("Пустая модель.")
-    bounds = [max(v[i] for v in coords) - min(v[i] for v in coords) for i in range(3)]
-    if len(coords) > 160_000:
+    coords=[v for part in parts for v in part.vertices]
+    if not coords:raise ValueError("Пустая модель.")
+    if len(coords)>160_000:
         raise ValueError("Модель слишком сложна; уменьшите детализацию изображения.")
-    return Preview(parts=parts, size_mm=[round(v, 2) for v in bounds], warnings=warnings,
-                   mount_contour=contour_samples(outline), mount_fraction=current_fraction,
-                   mount_surface_z=effective_thickness,
-                   text_bounds_mm=text_bounds, text_surface_z=text_surface_z,
-                   inner_contours=inner_previews)
+    size=[max(v[i] for v in coords)-min(v[i] for v in coords) for i in range(3)]
+    return Preview(parts=parts,size_mm=[round(v,2) for v in size],
+        warnings=warnings,mount_contour=contour_samples(outline),
+        mount_fraction=current_fraction,mount_surface_z=effective,
+        text_bounds_mm=text_bounds,text_surface_z=text_surface_z,
+        inner_contours=inner_previews,image_preview_url=image_preview,
+        image_palette=image_palette,magnet_positions=magnet_positions,
+        magnet_surface_z=magnet_surface_z)

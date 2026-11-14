@@ -5,6 +5,7 @@ import { BufferAttribute, BufferGeometry, DoubleSide, OrthographicCamera, Shape,
 import type { InnerContourPreview, Part, Preview } from "./types";
 import { MountHandle } from "./MountHandle";
 import { TextHandle } from "./TextHandle";
+import { MagnetHandles } from "./MagnetHandles";
 
 export type CameraView = "iso" | "top" | "bottom" | "front" | "back" | "left" | "right";
 
@@ -101,11 +102,14 @@ function CameraController({ preview, view }: { preview: Preview | null; view: Ca
 }
 
 export function Viewer({preview,view,mountEnabled,mountPosition,onMountPositionChange,
-  textPosition,onTextPositionChange,selectedContour,onContourSelect}:{
+  textPosition,onTextPositionChange,selectedContour,onContourSelect,
+  magnetEnabled,magnetPositions,onMagnetPositionChange}:{
   preview:Preview|null;view:CameraView;mountEnabled:boolean;
   mountPosition:number|null;onMountPositionChange:(fraction:number)=>void;
   textPosition:[number,number]|null;onTextPositionChange:(x:number,y:number)=>void;
-  selectedContour:string|null;onContourSelect:(id:string)=>void
+  selectedContour:string|null;onContourSelect:(id:string)=>void;
+  magnetEnabled:boolean;magnetPositions:number[][];
+  onMagnetPositionChange:(index:number,x:number,y:number)=>void
 }) {
   const [dragging,setDragging]=useState(false);
   useEffect(()=>setDragging(false),[mountEnabled,view]);
@@ -125,6 +129,10 @@ export function Viewer({preview,view,mountEnabled,mountPosition,onMountPositionC
         fraction={mountPosition??preview.mount_fraction??0}
         surfaceZ={preview.mount_surface_z}
         onChange={onMountPositionChange} onDragging={setDragging}/>}
+      {magnetEnabled && preview && magnetPositions.length>0 &&
+       <MagnetHandles positions={magnetPositions} contour={preview.mount_contour}
+        surfaceZ={preview.magnet_surface_z}
+        onMove={onMagnetPositionChange} onDragging={setDragging}/>}
       {preview?.text_bounds_mm && textPosition &&
        <TextHandle bounds={preview.text_bounds_mm} position={textPosition}
         surfaceZ={preview.text_surface_z} contour={preview.mount_contour}

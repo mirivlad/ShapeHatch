@@ -17,17 +17,19 @@ ET.register_namespace("m", MAT)
 
 def make_3mf(model: Preview) -> bytes:
     root = ET.Element(f"{{{CORE}}}model", {"unit": "millimeter", "xml:lang": "en-US"})
+    ET.SubElement(root, f"{{{CORE}}}metadata", {"name": "Title"}).text = "ShapeHatch — изделие для печати"
+    ET.SubElement(root, f"{{{CORE}}}metadata", {"name": "Application"}).text = "ShapeHatch"
     resources = ET.SubElement(root, f"{{{CORE}}}resources")
     colors = list(dict.fromkeys(part.color for part in model.parts))
-    materials = ET.SubElement(resources, f"{{{MAT}}}basematerials", {"id": "1"})
+    materials = ET.SubElement(resources, f"{{{CORE}}}basematerials", {"id": "1"})
     for i, color in enumerate(colors):
-        ET.SubElement(materials, f"{{{MAT}}}base",
-                      {"name": f"Color {i+1}", "displaycolor": color.upper() + "FF"})
+        ET.SubElement(materials, f"{{{CORE}}}base",
+                      {"name": f"Filament {i+1} — {color.upper()}", "displaycolor": color.upper() + "FF"})
 
     for part_id, part in enumerate(model.parts, start=2):
         obj = ET.SubElement(resources, f"{{{CORE}}}object", {
             "id": str(part_id), "type": "model", "pid": "1", "pindex": str(colors.index(part.color)),
-            "name": part.name})
+            "name": part.name, "partnumber": f"SH-{part_id:03d}"})
         mesh = ET.SubElement(obj, f"{{{CORE}}}mesh")
         vertices = ET.SubElement(mesh, f"{{{CORE}}}vertices")
         for x, y, z in part.vertices:
@@ -41,7 +43,8 @@ def make_3mf(model: Preview) -> bytes:
     # One model item containing all color parts, so a slicer keeps their alignment.
     parent_id = len(model.parts) + 2
     assembly = ET.SubElement(resources, f"{{{CORE}}}object",
-                             {"id": str(parent_id), "type": "model", "name": "ShapeHatch model"})
+                             {"id": str(parent_id), "type": "model",
+                              "name": "ShapeHatch — изделие (составные части)"})
     components = ET.SubElement(assembly, f"{{{CORE}}}components")
     for part_id in range(2, len(model.parts) + 2):
         ET.SubElement(components, f"{{{CORE}}}component", {"objectid": str(part_id)})
