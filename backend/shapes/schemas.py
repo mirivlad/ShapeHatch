@@ -41,9 +41,14 @@ class MagnetSettings(BaseModel):
 class PictureSettings(BaseModel):
     image_data: str = Field(default="", max_length=8_500_000)
     filename: str = Field(default="", max_length=200)
-    algorithm: Literal["nearest", "median", "kmeans", "floyd"] = "median"
+    algorithm: Literal["auto", "original", "nearest", "median", "kmeans", "floyd"] = "auto"
+    dithering: Literal["none", "floyd", "atkinson", "bayer"] = "none"
+    image_kind: Literal["logo", "photo"] = "logo"
+    fit_mode: Literal["fit", "fill", "width", "height", "manual"] = "fit"
+    scale: float = Field(default=1.0, ge=0.1, le=5)
+    preserve_aspect: bool = True
     color_count: int = Field(default=4, ge=2, le=16)
-    resolution: int = Field(default=48, ge=16, le=96)
+    resolution: int = Field(default=160, ge=16, le=320)
     filament_palette: list[Color] = Field(default_factory=list, max_length=16)
     color_overrides: list[Color] = Field(default_factory=list, max_length=16)
     width_mm: float = Field(default=45, ge=5, le=280)

@@ -7,7 +7,7 @@ an earlier wizard step invalidates only parts whose inputs really changed.
 from shapely.ops import unary_union
 
 from .attachments import prepare_mount, mount_spec, finish_post, cut_magnet_pockets
-from .geometry import plate_parts, plate_shape, silhouette_parts
+from .geometry import extrude, plate_parts, plate_shape, silhouette_parts
 from .image_trace import trace_artwork
 from .mounts import contour_samples
 from .picture_mesh import image_plate_parts
@@ -64,21 +64,19 @@ def generate(request:GenerateRequest)->Preview:
         shape=plate_shape(opts)
         shape,outline,current_fraction,attachment=prepare_mount(shape,opts)
         if opts.content_type=="image":
-            if not opts.picture.image_data:
-                raise ValueError("Загрузите изображение для таблички.")
-            parts,image_preview,image_palette=image_plate_parts(shape,geo_opts)
-            pixel_indices, _, _ = optimized_picture(opts.picture)
-            img_h, img_w = pixel_indices.shape
-            img_height = opts.picture.width_mm * img_h / img_w
-            text_bounds = [
-                round(opts.picture.x_mm-opts.picture.width_mm/2,3),
-                round(opts.picture.y_mm-img_height/2,3),
-                round(opts.picture.x_mm+opts.picture.width_mm/2,3),
-                round(opts.picture.y_mm+img_height/2,3)]
-            # Use the same drag handle below the face (Z=0), not on the rear.
-            text_surface_z=-1.35
+            # Before the image is loaded the user should still see the selected
+            # plate shape and dimensions, not an empty 3D viewer with an error.
+            if opts.picture.image_data:
+                parts,image_preview,image_palette,(img_width,img_height)=image_plate_parts(shape,geo_opts)
+                text_bounds=[
+                    round(opts.picture.x_mm-img_width/2,3),
+                    round(opts.picture.y_mm-img_height/2,3),
+                    round(opts.picture.x_mm+img_width/2,3),
+                    round(opts.picture.y_mm+img_height/2,3)]
+                text_surface_z=-1.35  # drag handle below the image face
+            else:
+                parts=[extrude(shape,0,effective,"Основа",opts.base_color,opts.top_round_mm)]
             warnings=[]
-            # The full plate body is first; the bottom picture is independent.
             parts=finish_post(parts,attachment,effective,opts.base_color,1)
         else:
             text=text_geometry(opts)

@@ -6,7 +6,7 @@ import {
   type LucideIcon
 } from "lucide-react";
 import { Viewer, type CameraView } from "./Viewer";
-import { goatDataUrl, initialPlate, initialSilhouette } from "./sample";
+import { goatDataUrl, initialPicture, initialPlate, initialSilhouette } from "./sample";
 import { AttachmentControls } from "./AttachmentControls";
 import { getProjects, removeProject, saveProject } from "./storage";
 import { loadMountPreferences, storeMountPreferences } from "./mountPreferences";
@@ -113,26 +113,36 @@ export function App() {
  const silhouetteMount:MountType=silhouette.mount_type??(
   silhouette.attach_loop?(silhouette.loop_orientation==="upright"?"upright":"loop"):"none");
  const currentMount:MountType=section==="silhouette"?silhouetteMount:plate.mount_type;
+ const pictureMode=section==="plate"&&plate.content_type==="image";
  const wizardSteps=section==="silhouette"
   ?["Силуэт","Внутренние контуры","Размеры","Крепление","Экспорт"]
-  :["Содержимое",plate.content_type==="image"?"Цвета изображения":"Текст",
-   "Основа и размещение","Крепление","Экспорт"];
+  :pictureMode
+  ?["Содержимое","Основа","Картинка и масштаб","Оптимизация цветов","Крепление","Экспорт"]
+  :["Содержимое","Текст","Основа и размещение","Крепление","Экспорт"];
+ const mountStep=pictureMode?4:3;
  const groupFor=(step:number):string=>section==="silhouette"
   ?["image","contours","dimensions","loop","export"][step]
-  :["content",plate.content_type==="image"?"picture":"text","base","mount","export"][step];
+  :pictureMode
+  ?["content","base","picture","colors","mount","export"][step]
+  :["content","text","base","mount","export"][step];
  const goStep=(step:number)=>{
-  const next=Math.max(0,Math.min(4,step));
+  const next=Math.max(0,Math.min(wizardSteps.length-1,step));
   setEditorStep(next);setOpenGroup(groupFor(next));
-  if(next===3 && currentMount==="magnets")setView(
-   section==="plate"&&plate.content_type==="image"?"top":"bottom");
-  if(next===2 && section==="plate"&&plate.content_type==="image")setView("bottom");
+  if(next===mountStep && currentMount==="magnets")setView(
+   pictureMode?"top":"bottom");
+  if(pictureMode&&(next===1||next===2))setView("bottom");
  };
+ const pictureProcessingKey=JSON.stringify([
+  plate.picture.image_data,plate.picture.algorithm,plate.picture.image_kind,
+  plate.picture.dithering,plate.picture.color_count,plate.picture.resolution,
+  plate.picture.filament_palette,plate.picture.color_overrides
+ ]);
  useEffect(()=>{
   if(section!=="plate"||plate.content_type!=="image"||!plate.picture.image_data){
    setPicturePreview(null);setPictureError("");setPictureBusy(false);return;
   }
   const controller=new AbortController();
-  setPictureBusy(true);setPictureError("");
+  setPictureBusy(true);setPictureError("");setPicturePreview(null);
   const timeout=setTimeout(async()=>{
    try{
     const response=await fetch("/api/picture/preview",{
@@ -146,7 +156,7 @@ export function App() {
    finally{if(!controller.signal.aborted)setPictureBusy(false);}
   },250);
   return ()=>{clearTimeout(timeout);controller.abort();};
- },[section,plate.content_type,plate.picture]);
+ },[section,plate.content_type,pictureProcessingKey]);
 
  const isEditor=section==="silhouette"||section==="plate";
  const visibleProjects=projects.filter(p=>galleryFilter==="all"||p.kind===galleryFilter);
@@ -238,7 +248,11 @@ export function App() {
  }
  function openProject(item:Project) {
   setSelectedContour(null);
-  if(item.kind==="plate"&&item.plate)setPlate({...initialPlate,...item.plate});
+  if(item.kind==="plate"&&item.plate){
+   const legacy={...initialPicture,...(item.plate.picture??{})};
+   if(legacy.algorithm==="floyd"){legacy.algorithm="median";legacy.dithering="floyd";}
+   setPlate({...initialPlate,...item.plate,picture:legacy});
+  }
   else if(item.silhouette)setSilhouette({...initialSilhouette,...item.silhouette,
    mount_type:item.silhouette.mount_type??(
     item.silhouette.attach_loop?(
@@ -272,7 +286,7 @@ export function App() {
    <button type="button" className="brand" onClick={()=>navigate("home")} aria-label="На главную">
     <div className="brand-icon"><Shapes size={23} strokeWidth={2.2}/></div>
     <span>Shape<span className="brand-accent">Hatch</span></span>
-    <span className="version">BETA 0.3</span>
+    <span className="version">BETA 0.3.1</span>
    </button>
    <nav className="top-nav">
     <button onClick={()=>navigate("home")} className={section==="home"?"active":""}>Главная</button>
@@ -362,7 +376,7 @@ export function App() {
       </button>
      </div>
     </section>}
-    {editorStep===4&&<section className="settings-group export-help">
+    {editorStep===wizardSteps.length-1&&<section className="settings-group export-help">
      <h3><Download size={18}/> Готово к печати</h3>
      <p className="mount-instructions">3MF сохраняет отдельные объёмы каждого цвета и названия частей.
       Проверьте соответствие цветов выбранным катушкам в слайсере.</p>
@@ -444,7 +458,7 @@ export function App() {
        onMagnets={v=>changeSilhouette("magnets",v)}/>
      </section>}
     </>:<>
-     {editorStep===2&&<Accordion title="Основа" icon={Box} opened={openGroup==="base"} onToggle={()=>toggleGroup("base")}>
+     {(pictureMode?editorStep===1:editorStep===2)&&<Accordion title="Основа" icon={Box} opened={openGroup==="base"} onToggle={()=>toggleGroup("base")}>
       <OptionSelect label="Форма" value={plate.shape} onChange={v=>changePlate("shape",v as Plate["shape"])}
        options={[{value:"rounded",label:"Скруглённый прямоугольник"},{value:"rectangle",label:"Прямоугольник"},
         {value:"oval",label:"Овал"},{value:"circle",label:"Круг"},{value:"hexagon",label:"Шестиугольник"}]}/>
@@ -467,27 +481,12 @@ export function App() {
        <NumberInput label="Сдвиг текста Y, мм" value={plate.text_y_mm} min={-100} max={100}
         onChange={v=>changePlate("text_y_mm",v)}/>
       </div>}
-      {plate.content_type==="image"&&<>
-       <div className="field-row">
-        <NumberInput label="Ширина картинки, мм" value={plate.picture.width_mm} min={5} max={280}
-         onChange={v=>changePicture("width_mm",v)}/>
-        <NumberInput label="Толщина цветного слоя, мм" value={plate.picture.layer_mm} min={0.2} max={2}
-         step={0.1} onChange={v=>changePicture("layer_mm",v)}/>
-       </div>
-       <div className="field-row">
-        <NumberInput label="Сдвиг картинки X, мм" value={plate.picture.x_mm}
-         min={-150} max={150} onChange={v=>changePicture("x_mm",v)}/>
-        <NumberInput label="Сдвиг картинки Y, мм" value={plate.picture.y_mm}
-         min={-100} max={100} onChange={v=>changePicture("y_mm",v)}/>
-       </div>
-       <small className="field-hint">Лицевая сторона с картинкой находится снизу (Z=0).</small>
-      </>}
       <ColorInput label="Цвет основы" value={plate.base_color} onChange={v=>changePlate("base_color",v)}/>
       <NumberInput label="Скругление верхней кромки, мм" value={plate.top_round_mm??0.3}
        min={0} max={0.4} step={0.05} onChange={v=>changePlate("top_round_mm",v)}/>
       <small className="field-hint">0 — без скругления; рекомендуется 0,2–0,4 мм.</small>
      </Accordion>}
-     {editorStep===3&&<section className="settings-group wizard-mount">
+     {editorStep===mountStep&&<section className="settings-group wizard-mount">
       <h3><Layers3 size={18}/> Крепление</h3>
       <AttachmentControls type={plate.mount_type}
        onTypeChange={v=>{
@@ -500,42 +499,88 @@ export function App() {
        magnets={plate.magnets}
        onMagnets={v=>changePlate("magnets",v)}/>
      </section>}
-     {editorStep===1&&plate.content_type==="image"&&<section className="settings-group picture-editor">
-      <h3><ImagePlus size={18}/> Картинка и цвета</h3>
-      <label className="upload-box"><UploadCloud size={25}/><strong>Загрузить рисунок</strong>
+     {pictureMode&&editorStep===2&&<section className="settings-group picture-editor">
+      <h3><ImagePlus size={18}/> Картинка и масштаб</h3>
+      <p className="field-hint">Размер таблички: {plate.width_mm} × {plate.height_mm} мм.
+       Для изменения основы вернитесь к шагу 2.</p>
+      <label className="upload-box"><UploadCloud size={25}/><strong>Загрузить картинку</strong>
        <small>PNG, JPG, WebP, SVG · до 5 МБ</small>
-       <input type="file" accept=".png,.jpg,.jpeg,.webp,.svg,image/*"
+       <input type="file" accept=".png,.jpg,.jpeg,.webp,.svg,image/png,image/jpeg,image/webp,image/svg+xml"
         onChange={e=>{const file=e.target.files?.[0];if(file)void uploadPicture(file);e.target.value="";}}/>
       </label>
       {plate.picture.filename&&<p className="file-name">Файл: {plate.picture.filename}</p>}
+      {plate.picture.image_data&&<div className="picture-comparison single-picture">
+       <div><strong>Исходное изображение</strong>
+        <img src={plate.picture.image_data} alt="Исходное изображение"/></div>
+      </div>}
+      <OptionSelect label="Подгонка к табличке" value={plate.picture.fit_mode??"fit"}
+       options={[{value:"fit",label:"Вписать целиком"},{value:"fill",label:"Заполнить табличку (с обрезкой)"},
+        {value:"width",label:"По ширине"},{value:"height",label:"По высоте"},
+        {value:"manual",label:"Задать ширину вручную"}]}
+       onChange={v=>changePicture("fit_mode",v as PictureSettings["fit_mode"])}/>
+      {plate.picture.fit_mode==="manual"&&<NumberInput label="Ширина картинки, мм"
+       value={plate.picture.width_mm} min={5} max={280} step={0.5}
+       onChange={v=>changePicture("width_mm",v)}/>}
+      <NumberInput label="Масштаб, %" value={Math.round((plate.picture.scale??1)*100)}
+       min={10} max={500} step={5} onChange={v=>changePicture("scale",v/100)}/>
+      {["fit","fill"].includes(plate.picture.fit_mode??"fit")&&
+       <Toggle label="Сохранять пропорции" checked={plate.picture.preserve_aspect??true}
+        onChange={v=>changePicture("preserve_aspect",v)}/>}
       <div className="field-row">
-       <OptionSelect label="Алгоритм" value={plate.picture.algorithm}
-        options={[{value:"median",label:"Median Cut"},{value:"kmeans",label:"K-Means"},
-         {value:"nearest",label:"Ближайший цвет"},{value:"floyd",label:"Floyd–Steinberg"}]}
-        onChange={v=>changePicture("algorithm",v as PictureSettings["algorithm"])}/>
-       <NumberInput label="Число цветов" value={plate.picture.color_count}
+       <NumberInput label="Сдвиг X, мм" value={plate.picture.x_mm}
+        min={-150} max={150} onChange={v=>changePicture("x_mm",v)}/>
+       <NumberInput label="Сдвиг Y, мм" value={plate.picture.y_mm}
+        min={-100} max={100} onChange={v=>changePicture("y_mm",v)}/>
+      </div>
+      <NumberInput label="Толщина цветного слоя, мм" value={plate.picture.layer_mm}
+       min={0.2} max={2} step={0.1} onChange={v=>changePicture("layer_mm",v)}/>
+      <small className="field-hint">Картинка помещается на нижнюю лицевую поверхность
+       (Z=0). Выступающие за основу края обрезаются автоматически.</small>
+     </section>}
+     {pictureMode&&editorStep===3&&<section className="settings-group picture-editor">
+      <h3><ImagePlus size={18}/> Цвета и оптимизация</h3>
+      {!plate.picture.image_data?<p className="field-hint">Сначала загрузите рисунок на шаге 3.</p>:<>
+      <div className="field-row">
+       <OptionSelect label="Тип изображения" value={plate.picture.image_kind??"logo"}
+        options={[{value:"logo",label:"Логотип / пиктограмма (резкие края)"},
+         {value:"photo",label:"Фотография / градиенты"}]}
+        onChange={v=>changePicture("image_kind",v as PictureSettings["image_kind"])}/>
+       <NumberInput label="Количество цветов" value={plate.picture.color_count}
         min={2} max={16} step={1} onChange={v=>changePicture("color_count",v)}/>
       </div>
-      <NumberInput label="Детализация (пикселей по длинной стороне)" value={plate.picture.resolution}
-        min={16} max={96} step={8} onChange={v=>changePicture("resolution",v)}/>
+      <OptionSelect label="Алгоритм подбора цветов" value={plate.picture.algorithm}
+       options={[{value:"auto",label:"Авто (для логотипов сохранять исходные цвета)"},
+        {value:"original",label:"Без оптимизации (исходные цвета)"},
+        {value:"nearest",label:"Ближайшие преобладающие цвета"},
+        {value:"median",label:"Median Cut"},{value:"kmeans",label:"K-Means"}]}
+       onChange={v=>changePicture("algorithm",v as PictureSettings["algorithm"])}/>
+      <OptionSelect label="Дизеринг" value={plate.picture.dithering??"none"}
+       options={[{value:"none",label:"Без дизеринга — чёткие границы"},
+        {value:"floyd",label:"Floyd–Steinberg"},{value:"atkinson",label:"Atkinson"},
+        {value:"bayer",label:"Bayer 4×4"}]}
+       onChange={v=>changePicture("dithering",v as PictureSettings["dithering"])}/>
+      <NumberInput label="Детализация 3D-рисунка (пикселей по длинной стороне)"
+       value={plate.picture.resolution} min={16} max={320} step={16}
+       onChange={v=>changePicture("resolution",v)}/>
+      <small className="field-hint">Выше детализация — больше мелких объёмов и тяжелее 3MF.
+       Для печати логотипов обычно подходит 128–192.</small>
       {pictureError&&<p className="field-hint" role="alert">{pictureError}</p>}
       {pictureBusy&&<p className="field-hint">Оптимизация изображения…</p>}
-      {plate.picture.image_data&&<div className="picture-comparison">
+      <div className="picture-comparison">
        <div><strong>Оригинал</strong><img src={plate.picture.image_data} alt="Исходное изображение"/></div>
        <div><strong>После оптимизации</strong>{picturePreview&&
-        <img src={picturePreview.image_url} alt="Результат ограниченной цветовой палитры"/>}</div>
-      </div>}
+        <img src={picturePreview.image_url} alt="Результат выбранного алгоритма"/>}</div>
+      </div>
       {picturePreview&&<>
        <label className="toggle"><span>Использовать цвета своих катушек</span>
         <input type="checkbox" checked={plate.picture.filament_palette.length>0}
          onChange={e=>changePicture("filament_palette",
           e.target.checked?picturePreview.colors.slice(0,plate.picture.color_count):[])}/></label>
-       {plate.picture.filament_palette.length>0&&
-        plate.picture.filament_palette.map((color,index)=><ColorInput key={index}
-         label={"Катушка "+(index+1)} value={color}
-         onChange={v=>changePicture("filament_palette",
-          plate.picture.filament_palette.map((c,i)=>i===index?v:c))}/>)}
-       <p className="field-hint">Цветовые области редактируются независимо. Можно заменить любой цвет.</p>
+       {plate.picture.filament_palette.map((color,index)=><ColorInput key={index}
+        label={"Катушка "+(index+1)} value={color}
+        onChange={v=>changePicture("filament_palette",
+         plate.picture.filament_palette.map((c,i)=>i===index?v:c))}/>)}
+       <p className="field-hint">Можно заменить любой цвет отдельно, не меняя цветовые области.</p>
        {picturePreview.colors.map((color,index)=><div key={index} className="palette-override">
         <ColorInput label={"Цвет "+(index+1)+" · "+picturePreview.pixel_counts[index]+" пикс."}
          value={plate.picture.color_overrides[index]??color}
@@ -543,9 +588,9 @@ export function App() {
           picturePreview.colors.map((c,i)=>i===index?v:(plate.picture.color_overrides[i]??c)))}/>
        </div>)}
        {plate.picture.color_overrides.length>0&&
-        <button type="button" className="secondary-btn" onClick={()=>changePicture("color_overrides",[])}>
-         Сбросить ручные цвета
-        </button>}
+        <button type="button" className="secondary-btn"
+         onClick={()=>changePicture("color_overrides",[])}>Сбросить ручные цвета</button>}
+      </>}
       </>}
      </section>}
      {editorStep===1&&plate.content_type==="text"&&<Accordion title="Надпись" icon={Type} opened={openGroup==="text"} onToggle={()=>toggleGroup("text")}>
@@ -608,14 +653,14 @@ export function App() {
       onClick={()=>setView(v.id)}>{v.label}</button>)}</div></div>
     <div className="scene">
      <Viewer key={kind} preview={model} view={view}
-       mountEnabled={editorStep===3&&["hole","loop","upright"].includes(currentMount)}
+       mountEnabled={editorStep===mountStep&&["hole","loop","upright"].includes(currentMount)}
        mountPosition={kind==="plate"?plate.mount_contour_t??null:silhouette.loop_contour_t??null}
        onMountPositionChange={fraction=>kind==="plate"
         ?changePlate("mount_contour_t",fraction)
         :changeSilhouette("loop_contour_t",fraction)}
        selectedContour={kind==="silhouette"?selectedContour:null}
        onContourSelect={selectContour}
-       magnetEnabled={editorStep===3&&currentMount==="magnets"}
+       magnetEnabled={editorStep===mountStep&&currentMount==="magnets"}
        magnetPositions={(kind==="silhouette"?silhouette.magnets:plate.magnets).positions.map(p=>[p.x_mm,p.y_mm])}
        onMagnetPositionChange={updateMagnet}
        textPosition={kind==="plate"&&editorStep===2?(
@@ -629,7 +674,7 @@ export function App() {
      <div className="scene-info"><span><ZoomIn size={14}/> Колесо — масштаб</span>
       <span><RotateCcw size={14}/> ЛКМ — вращение</span><span>ПКМ — панорама</span>
       {kind==="plate"&&editorStep===2&&<span>Оранжевая ручка — {plate.content_type==="image"?"картинка":"текст"}</span>}
-      {editorStep===3&&currentMount==="magnets"&&<span>Сиреневые ручки — магниты</span>}
+      {editorStep===mountStep&&currentMount==="magnets"&&<span>Сиреневые ручки — магниты</span>}
       {kind==="silhouette"&&!!model?.inner_contours?.length&&<span>Нажмите на внутренний контур — его настройки</span>}</div>
      {busy&&<div className="scene-spinner"><LoaderCircle size={20} className="spin"/> Построение модели…</div>}
      {error&&<div className="scene-error"><CircleHelp size={18}/>{error}</div>}

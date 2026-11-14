@@ -1,6 +1,7 @@
 """Regression coverage for wizard's shared mounts, colored images and part caching."""
 import base64
 import io
+from PIL import Image
 import unittest
 import zipfile
 from xml.etree import ElementTree as ET
@@ -12,8 +13,8 @@ from shapes.build import generate
 from shapes.exporter import make_3mf
 from shapes.geometry import _cached_extrusion
 from shapes.image_trace import _trace_cached
-from shapes.picture import optimized_picture
-from shapes.picture_mesh import _image_regions
+from shapes.picture import optimized_picture, _quantize
+from shapes.picture_mesh import _image_regions, placement_dimensions
 from shapes.schemas import (GenerateRequest,PlateOptions,SilhouetteOptions,
                             PictureSettings,MagnetSettings,MagnetPosition)
 
@@ -51,6 +52,97 @@ class PictureMountTests(unittest.TestCase):
                 self.assertEqual(len(colors),2)
                 self.assertEqual(indices.ndim,2)
                 self.assertTrue(url.startswith("data:image/png;base64,"))
+
+    def test_flat_four_color_logo_is_not_requantized(self):
+        # A real 4-color logo must not drift just because K-Means or
+        # Median Cut was selected. The exact RGB pixels are the ground truth.
+        colors=np.asarray([[255,255,255],[0,0,0],[229,13,30],[30,90,170]],dtype=np.uint8)
+        image=np.empty((48,72,3),dtype=np.uint8)
+        for x in range(72):image[:,x]=colors[x//18]
+        data=io.BytesIO()
+        Image.fromarray(image).save(data,format="PNG")
+        url="data:image/png;base64,"+base64.b64encode(data.getvalue()).decode()
+        for method in ("auto","original","median","kmeans","nearest"):
+            with self.subTest(method=method):
+                opts=PictureSettings(image_data=url,algorithm=method,
+                                     color_count=4,resolution=160,image_kind="logo")
+                indexed,output_colors,_=optimized_picture(opts)
+                rebuild=np.asarray([tuple(int(c[i:i+2],16) for i in (1,3,5))
+                                    for c in output_colors],dtype=np.uint8)[indexed]
+                self.assertTrue(np.array_equal(rebuild,image))
+                self.assertEqual(set(output_colors),{"#FFFFFF","#000000","#E50D1E","#1E5AAA"})
+
+    def test_approximate_jpeg_logo_keeps_white_black_red(self):
+        image=np.full((100,160,3),255,dtype=np.uint8)
+        image[20:82,27:130]=[234,15,28]
+        image[28:35,36:122]=[0,0,0]
+        buf=io.BytesIO()
+        Image.fromarray(image).save(buf,format="JPEG",quality=90)
+        url="data:image/jpeg;base64,"+base64.b64encode(buf.getvalue()).decode()
+        opts=PictureSettings(image_data=url,algorithm="auto",color_count=4,
+                             resolution=160,image_kind="logo")
+        indexed,palette,_=optimized_picture(opts)
+        rgb=np.array([tuple(int(c[i:i+2],16) for i in (1,3,5)) for c in palette])
+        self.assertTrue(any((p>235).all() for p in rgb),palette)
+        self.assertTrue(any((p<40).all() for p in rgb),palette)
+        self.assertTrue(any(p[0]>170 and p[1]<60 and p[2]<70 for p in rgb),palette)
+        self.assertLessEqual(len(palette),4)
+
+    def test_dithering_is_separate_from_palette_algorithm(self):
+        ramp=np.zeros((64,128,3),dtype=np.uint8)
+        ramp[:]=np.linspace(0,255,128,dtype=np.uint8)[None,:,None]
+        out=io.BytesIO()
+        Image.fromarray(ramp).save(out,format="PNG")
+        url="data:image/png;base64,"+base64.b64encode(out.getvalue()).decode()
+        masks={}
+        for mode in ("none","floyd","atkinson","bayer"):
+            opts=PictureSettings(image_data=url,color_count=2,resolution=128,
+                     algorithm="median",image_kind="photo",dithering=mode)
+            masks[mode]=optimized_picture(opts)[0]
+        self.assertFalse(np.array_equal(masks["none"],masks["floyd"]))
+        self.assertFalse(np.array_equal(masks["none"],masks["atkinson"]))
+        self.assertFalse(np.array_equal(masks["none"],masks["bayer"]))
+
+    def test_plate_size_controls_image_and_cover_clips(self):
+        from shapes.geometry import plate_shape
+        from shapes.schemas import PlateOptions
+        plate_options=PlateOptions(width_mm=90,height_mm=40,shape="rectangle")
+        shape=plate_shape(plate_options)
+        opts=PictureSettings(image_data=sample(),resolution=24)
+        a=placement_dimensions(opts,shape,72,48)
+        self.assertAlmostEqual(a[1],38.4,places=2)
+        self.assertAlmostEqual(a[0],57.6,places=2)
+        b=placement_dimensions(opts.model_copy(update={"fit_mode":"fill"}),shape,72,48)
+        self.assertGreater(b[1],a[1])
+        c=placement_dimensions(opts.model_copy(update={"fit_mode":"width"}),shape,72,48)
+        self.assertAlmostEqual(c[0],88.4,places=2)
+        d=placement_dimensions(opts.model_copy(update={"fit_mode":"manual","width_mm":20,"scale":1.5}),shape,72,48)
+        self.assertAlmostEqual(d[0],30,places=3)
+        fit=plate(content_type="image",width_mm=90,height_mm=40,shape="rectangle",
+                  picture=opts)
+        cover=plate(content_type="image",width_mm=90,height_mm=40,shape="rectangle",
+                    picture=opts.model_copy(update={"fit_mode":"fill"}))
+        self.assertEqual(len(fit.image_palette),2)
+        self.assertEqual(len(cover.image_palette),2)
+        for result in (fit,cover):
+            for part in result.parts:
+                volume(part)
+                self.assertLessEqual(max(v[0] for v in part.vertices),45.001)
+                self.assertGreaterEqual(min(v[0] for v in part.vertices),-45.001)
+
+    def test_shape_is_visible_before_picture_is_uploaded(self):
+        preview=plate(content_type="image",picture=PictureSettings())
+        self.assertEqual(preview.parts[0].name,"Основа")
+        self.assertEqual(len(preview.image_palette),0)
+        volume(preview.parts[0])
+
+    def test_picture_colors_survive_size_change_without_requantization(self):
+        opts=PictureSettings(image_data=sample(),resolution=48,color_count=2)
+        _quantize.cache_clear()
+        plate(content_type="image",picture=opts,width_mm=80,height_mm=32)
+        hit=_quantize.cache_info().hits
+        plate(content_type="image",picture=opts,width_mm=100,height_mm=35)
+        self.assertGreater(_quantize.cache_info().hits,hit)
 
     def test_picture_is_face_down_and_multicolor(self):
         picture=PictureSettings(image_data=sample(),resolution=24,width_mm=44,

@@ -140,3 +140,11 @@ background:#eff8f3;border:1px solid #cee5da;border-radius:8px;margin:10px 0}
 .magnet-position-row .field input{padding:7px 4px;font-size:12px}
 .magnet-position-row .remove-magnet{border:0;background:#fcf0ed;color:#b97158;border-radius:6px;width:28px;height:33px;display:grid;place-items:center}
 .export-help p{font-size:12px}
+
+
+/* Wizard steps fit in the sidebar; no horizontal scrollbar at six steps. */
+.wizard-steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));overflow:visible;gap:6px}
+.wizard-steps button{min-width:0;width:100%;flex:auto;overflow-wrap:anywhere;min-height:65px}
+.single-picture{grid-template-columns:1fr}
+.single-picture img{max-height:180px}
+.picture-editor .field-hint{line-height:1.45}

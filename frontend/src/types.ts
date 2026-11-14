@@ -9,7 +9,9 @@ export type MagnetSettings={
  depth_mm:number;clearance_mm:number;positions:MagnetPoint[];
 };
 export type PictureSettings={
- image_data:string;filename:string;algorithm:"nearest"|"median"|"kmeans"|"floyd";
+ image_data:string;filename:string;algorithm:"auto"|"original"|"nearest"|"median"|"kmeans"|"floyd";
+ dithering:"none"|"floyd"|"atkinson"|"bayer";image_kind:"logo"|"photo";
+ fit_mode:"fit"|"fill"|"width"|"height"|"manual";scale:number;preserve_aspect:boolean;
  color_count:number;resolution:number;filament_palette:string[];color_overrides:string[];
  width_mm:number;x_mm:number;y_mm:number;layer_mm:number;
 };

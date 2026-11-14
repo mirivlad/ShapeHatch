@@ -8,7 +8,8 @@ export const initialMagnets:MagnetSettings={
  clearance_mm:0.2,positions:[{x_mm:0,y_mm:0}]
 };
 export const initialPicture:PictureSettings={
- image_data:"",filename:"",algorithm:"median",color_count:4,resolution:48,
+ image_data:"",filename:"",algorithm:"auto",dithering:"none",image_kind:"logo",
+ fit_mode:"fit",scale:1,preserve_aspect:true,color_count:4,resolution:160,
  filament_palette:[],color_overrides:[],width_mm:45,x_mm:0,y_mm:0,layer_mm:0.4
 };
 export const initialSilhouette: Silhouette = {
