@@ -9,7 +9,7 @@ import { Viewer, type CameraView } from "./Viewer";
 import { goatDataUrl, initialPlate, initialSilhouette } from "./sample";
 import { getProjects, removeProject, saveProject } from "./storage";
 import { loadMountPreferences, storeMountPreferences } from "./mountPreferences";
-import type { Plate, Preview, Project, Section, Silhouette } from "./types";
+import type { InnerContourSetting, Plate, Preview, Project, Section, Silhouette } from "./types";
 
 function NumberInput({ label, value, onChange, min, max, step=0.1 }: {
   label:string; value:number; onChange:(value:number)=>void; min?:number; max?:number; step?:number
@@ -62,6 +62,7 @@ export function App() {
   ...initialPlate,mount_hole_mm:mountPrefs.holeMm,mount_wall_mm:mountPrefs.wallMm
  }));
  const [openGroup,setOpenGroup]=useState("image");
+ const [selectedContour,setSelectedContour]=useState<string|null>(null);
  const toggleGroup=(id:string)=>setOpenGroup(old=>old===id?"":id);
  const [model,setModel]=useState<Preview|null>(null);
  const [view,setView]=useState<CameraView>("iso");
@@ -78,6 +79,17 @@ export function App() {
   if(key==="loop_hole_mm"||key==="loop_wall_mm")
    setMountPrefs(prev=>({...prev,[key==="loop_hole_mm"?"holeMm":"wallMm"]:Number(value)}));
  };
+ const changeInner=(id:string, values:Partial<InnerContourSetting>)=>{
+  setSilhouette(prev=>{
+   const old=prev.inner_contours??[];
+   const original=old.find(item=>item.id===id)??{
+    id,fill:prev.mode==="cutouts"?"empty":"same",color:"#F26C50"
+   };
+   const updated={...original,...values} as InnerContourSetting;
+   return {...prev,inner_contours:[...old.filter(item=>item.id!==id),updated]};
+  });
+ };
+ const selectContour=(id:string)=>{setSelectedContour(id);setOpenGroup("contours");};
  const changePlate=<K extends keyof Plate>(key:K,value:Plate[K])=>{
   setPlate(prev=>({...prev,[key]:value}));
   if(key==="mount_hole_mm"||key==="mount_wall_mm")
@@ -123,6 +135,7 @@ export function App() {
   if(next==="gallery")void refreshGallery();
  }
  function create(next:"silhouette"|"plate") {
+  setSelectedContour(null);
   setProjectId(null);
   setProjectName("");
   setSilhouette({...initialSilhouette,loop_hole_mm:mountPrefs.holeMm,loop_wall_mm:mountPrefs.wallMm});
@@ -138,7 +151,8 @@ export function App() {
     setError("Поддерживаются PNG, JPG, WebP и SVG.");return;}
   const reader=new FileReader();
   reader.onload=()=>{if(typeof reader.result==="string"){
-   changeSilhouette("image_data",reader.result);changeSilhouette("filename",file.name);}};
+   setSilhouette(prev=>({...prev,image_data:reader.result as string,filename:file.name,inner_contours:[]}));
+   setSelectedContour(null);}};
   reader.onerror=()=>setError("Не удалось прочитать файл.");
   reader.readAsDataURL(file.type === format ? file : new Blob([file], {type: format}));
  }
@@ -152,6 +166,7 @@ export function App() {
   catch {setToast("Не удалось сохранить проект. Проверьте доступность IndexedDB.");}
  }
  function openProject(item:Project) {
+  setSelectedContour(null);
   if(item.kind==="plate"&&item.plate)setPlate({...initialPlate,...item.plate});
   else if(item.silhouette)setSilhouette({...initialSilhouette,...item.silhouette});
   setProjectId(item.id);setProjectName(item.name);setView("iso");navigate(item.kind);
@@ -183,7 +198,7 @@ export function App() {
    <button type="button" className="brand" onClick={()=>navigate("home")} aria-label="На главную">
     <div className="brand-icon"><Shapes size={23} strokeWidth={2.2}/></div>
     <span>Shape<span className="brand-accent">Hatch</span></span>
-    <span className="version">BETA 0.1</span>
+    <span className="version">BETA 0.2</span>
    </button>
    <nav className="top-nav">
     <button onClick={()=>navigate("home")} className={section==="home"?"active":""}>Главная</button>
@@ -270,6 +285,36 @@ export function App() {
          onChange={v=>changeSilhouette("smoothing_mm",v)}/>
       </div><Toggle label="Инвертировать" checked={silhouette.invert} onChange={v=>changeSilhouette("invert",v)}/>
      </Accordion>
+     <Accordion title={"Внутренние контуры"+(model?.inner_contours?.length?" · "+model.inner_contours.length:"")}
+       icon={Layers3} opened={openGroup==="contours"} onToggle={()=>toggleGroup("contours")}>
+      <p className="mount-instructions">Выберите контур в списке или нажмите на выделенную область прямо в 3D-просмотре.
+       Вставка другого цвета формируется в верхних слоях детали.</p>
+      {!model?.inner_contours?.length
+       ?<p className="field-hint">Внутренние замкнутые контуры не обнаружены. Если это рисунок линиями,
+         попробуйте режим «Контурный рисунок» и настройку порога распознавания.</p>
+       :model.inner_contours.map((entry,index)=>{
+        const style=silhouette.inner_contours?.find(x=>x.id===entry.id);
+        const fill=style?.fill??(silhouette.mode==="cutouts"?"empty":"same");
+        const active=selectedContour===entry.id;
+        return <div key={entry.id} className={"contour-row"+(active?" active":"")}>
+         <button type="button" className="contour-select" onClick={()=>setSelectedContour(entry.id)}>
+          <span className="contour-marker">{index+1}</span> Внутренний контур {index+1}
+          {active&&<Check size={15}/>}
+         </button>
+         <OptionSelect label="Режим заполнения" value={fill}
+          options={[{value:"same",label:"Тот же материал"},{value:"other",label:"Другой материал / цвет"},
+           {value:"empty",label:"Оставить пустым (сквозное отверстие)"}]}
+          onChange={v=>changeInner(entry.id,{fill:v as InnerContourSetting["fill"]})}/>
+         {fill==="other"&&<ColorInput label="Цвет вставки" value={style?.color??"#F26C50"}
+          onChange={v=>changeInner(entry.id,{color:v})}/>}
+        </div>;
+       })}
+      {model?.inner_contours.some(x=>
+        (silhouette.inner_contours?.find(y=>y.id===x.id)?.fill??(silhouette.mode==="cutouts"?"empty":"same"))==="other")
+        &&<NumberInput label="Глубина цветных вставок, мм" value={silhouette.inlay_depth_mm??0.8}
+         min={0.2} max={Math.min(5,Math.max(0.2,silhouette.thickness_mm-0.3))}
+         step={0.1} onChange={v=>changeSilhouette("inlay_depth_mm",v)}/>}
+     </Accordion>
      <Accordion title="Размеры" icon={Settings2} opened={openGroup==="dimensions"} onToggle={()=>toggleGroup("dimensions")}>
       <div className="field-row"><NumberInput label="Ширина, мм" value={silhouette.width_mm} min={10} max={300}
        onChange={v=>changeSilhouette("width_mm",v)}/>
@@ -279,6 +324,9 @@ export function App() {
        :<NumberInput label="Толщина, мм" value={silhouette.thickness_mm} min={0.6} max={25}
          onChange={v=>changeSilhouette("thickness_mm",v)}/>}</div>
       <ColorInput label="Цвет изделия" value={silhouette.color} onChange={v=>changeSilhouette("color",v)}/>
+      <NumberInput label="Скругление верхней кромки, мм" value={silhouette.top_round_mm??0.3}
+       min={0} max={0.4} step={0.05} onChange={v=>changeSilhouette("top_round_mm",v)}/>
+      <small className="field-hint">0 — без скругления; рекомендуется 0,2–0,4 мм.</small>
      </Accordion>
      <Accordion title="Петелька для кольца" icon={Layers3} opened={openGroup==="loop"} onToggle={()=>toggleGroup("loop")}>
       <Toggle label="Добавить петельку" checked={silhouette.attach_loop} onChange={v=>changeSilhouette("attach_loop",v)}/>
@@ -323,6 +371,9 @@ export function App() {
         onChange={v=>changePlate("corner_radius_mm",v)}/>}
       </div>
       <ColorInput label="Цвет основы" value={plate.base_color} onChange={v=>changePlate("base_color",v)}/>
+      <NumberInput label="Скругление верхней кромки, мм" value={plate.top_round_mm??0.3}
+       min={0} max={0.4} step={0.05} onChange={v=>changePlate("top_round_mm",v)}/>
+      <small className="field-hint">0 — без скругления; рекомендуется 0,2–0,4 мм.</small>
      </Accordion>
      <Accordion title="Крепление для кольца" icon={Layers3} opened={openGroup==="mount"} onToggle={()=>toggleGroup("mount")}>
       <OptionSelect label="Тип крепления" value={plate.mount_type??"none"}
@@ -410,11 +461,14 @@ export function App() {
        onMountPositionChange={fraction=>kind==="plate"
         ?changePlate("mount_contour_t",fraction)
         :changeSilhouette("loop_contour_t",fraction)}
+       selectedContour={kind==="silhouette"?selectedContour:null}
+       onContourSelect={selectContour}
        textPosition={kind==="plate"?[plate.text_x_mm,plate.text_y_mm]:null}
        onTextPositionChange={(x,y)=>setPlate(prev=>({...prev,text_x_mm:x,text_y_mm:y}))}/>
      <div className="scene-info"><span><ZoomIn size={14}/> Колесо — масштаб</span>
       <span><RotateCcw size={14}/> ЛКМ — вращение</span><span>ПКМ — панорама</span>
-      {kind==="plate"&&<span>Оранжевая ручка — текст</span>}</div>
+      {kind==="plate"&&<span>Оранжевая ручка — текст</span>}
+      {kind==="silhouette"&&!!model?.inner_contours?.length&&<span>Нажмите на внутренний контур — его настройки</span>}</div>
      {busy&&<div className="scene-spinner"><LoaderCircle size={20} className="spin"/> Построение модели…</div>}
      {error&&<div className="scene-error"><CircleHelp size={18}/>{error}</div>}
     </div>

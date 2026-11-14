@@ -4,6 +4,25 @@ from pydantic import BaseModel, Field, field_validator
 Color = str
 
 
+class InnerContourOption(BaseModel):
+    id: str = Field(pattern=r"^inner-[0-9]+$", max_length=20)
+    fill: Literal["same", "other", "empty"] = "same"
+    color: Color = "#F26C50"
+
+    @field_validator("color")
+    @classmethod
+    def valid_color(cls, value: str) -> str:
+        if len(value) != 7 or value[0] != "#" or any(c not in "0123456789abcdefABCDEF" for c in value[1:]):
+            raise ValueError("Color must be in #RRGGBB format")
+        return value.upper()
+
+
+class InnerContourPreview(BaseModel):
+    id: str
+    points: list[list[float]]
+    fill: Literal["same", "other", "empty"]
+
+
 class SilhouetteOptions(BaseModel):
     image_data: str = Field(max_length=8_500_000)
     filename: str = Field(default="image.png", max_length=200)
@@ -13,6 +32,9 @@ class SilhouetteOptions(BaseModel):
     invert: bool = False
     mode: Literal["filled", "cutouts", "lines"] = "filled"
     smoothing_mm: float = Field(default=0.10, ge=0, le=2)
+    top_round_mm: float = Field(default=0.3, ge=0, le=0.4)
+    inlay_depth_mm: float = Field(default=0.8, ge=0.2, le=5)
+    inner_contours: list[InnerContourOption] = Field(default_factory=list, max_length=24)
     attach_loop: bool = True
     loop_side: Literal["top", "bottom", "left", "right"] = "top"
     loop_orientation: Literal["flat", "upright"] = "flat"
@@ -37,6 +59,7 @@ class PlateOptions(BaseModel):
     thickness_mm: float = Field(default=3, ge=0.8, le=25)
     shape: Literal["rounded", "rectangle", "oval", "circle", "hexagon"] = "rounded"
     corner_radius_mm: float = Field(default=6, ge=0, le=50)
+    top_round_mm: float = Field(default=0.3, ge=0, le=0.4)
     mount_type: Literal["none", "hole", "loop", "upright"] = "none"
     mount_contour_t: float | None = Field(default=None, ge=0, le=1)
     mount_side: Literal["top", "bottom", "left", "right"] = "top"
@@ -84,3 +107,4 @@ class Preview(BaseModel):
     mount_surface_z: float = 0.0
     text_bounds_mm: list[float] | None = None
     text_surface_z: float = 0.0
+    inner_contours: list[InnerContourPreview] = Field(default_factory=list)

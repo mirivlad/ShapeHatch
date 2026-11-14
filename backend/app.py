@@ -7,7 +7,7 @@ from shapes.build import generate
 from shapes.exporter import make_3mf, make_stl, make_stl_zip
 from shapes.schemas import GenerateRequest
 
-app = FastAPI(title="ShapeHatch API", version="0.1.0")
+app = FastAPI(title="ShapeHatch API", version="0.2.0")
 # In production Nginx serves frontend + /api on one origin.
 app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173"],
                    allow_credentials=False, allow_methods=["GET", "POST"],
@@ -16,7 +16,7 @@ app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173"],
 
 @app.get("/api/health")
 def health():
-    return {"ok": True, "version": "0.1.0"}
+    return {"ok": True, "version": "0.2.0"}
 
 
 @app.post("/api/preview")

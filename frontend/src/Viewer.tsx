@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
 import { GizmoHelper, GizmoViewcube, OrbitControls } from "@react-three/drei";
-import { BufferAttribute, BufferGeometry, DoubleSide, OrthographicCamera, Vector3 } from "three";
-import type { Part, Preview } from "./types";
+import { BufferAttribute, BufferGeometry, DoubleSide, OrthographicCamera, Shape, ShapeGeometry, Vector2, Vector3 } from "three";
+import type { InnerContourPreview, Part, Preview } from "./types";
 import { MountHandle } from "./MountHandle";
 import { TextHandle } from "./TextHandle";
 
@@ -21,6 +21,34 @@ function MeshPart({ part }: { part: Part }) {
   return <mesh geometry={geometry}>
     <meshStandardMaterial color={part.color} metalness={0.04} roughness={0.75} side={DoubleSide} />
   </mesh>;
+}
+
+function InnerContourHandle({contour, z, selected, onSelect}: {
+  contour:InnerContourPreview; z:number; selected:boolean; onSelect:(id:string)=>void
+}) {
+  const fill = useMemo(()=>{
+    const polygon=new Shape(contour.points.map(([x,y])=>new Vector2(x,y)));
+    return new ShapeGeometry(polygon);
+  },[contour.points]);
+  const outline=useMemo(()=>{
+    const g=new BufferGeometry();
+    g.setFromPoints(contour.points.map(([x,y])=>new Vector3(x,y,0)));
+    return g;
+  },[contour.points]);
+  useEffect(()=>()=>{fill.dispose();outline.dispose();},[fill,outline]);
+  return <group position={[0,0,z+0.055]}>
+    <mesh geometry={fill} renderOrder={7}
+      onClick={event=>{event.stopPropagation();onSelect(contour.id);}}>
+      <meshBasicMaterial color={selected?"#FFAE42":"#37A58A"}
+        transparent opacity={selected?0.28:0.12} side={DoubleSide}
+        depthWrite={false} depthTest={false}/>
+    </mesh>
+    <lineLoop geometry={outline} renderOrder={8}
+      onClick={event=>{event.stopPropagation();onSelect(contour.id);}}>
+      <lineBasicMaterial color={selected?"#F28B2B":"#168C79"}
+        transparent opacity={selected?1:0.82} depthTest={false}/>
+    </lineLoop>
+  </group>;
 }
 
 function CameraController({ preview, view }: { preview: Preview | null; view: CameraView }) {
@@ -73,10 +101,11 @@ function CameraController({ preview, view }: { preview: Preview | null; view: Ca
 }
 
 export function Viewer({preview,view,mountEnabled,mountPosition,onMountPositionChange,
-  textPosition,onTextPositionChange}:{
+  textPosition,onTextPositionChange,selectedContour,onContourSelect}:{
   preview:Preview|null;view:CameraView;mountEnabled:boolean;
   mountPosition:number|null;onMountPositionChange:(fraction:number)=>void;
-  textPosition:[number,number]|null;onTextPositionChange:(x:number,y:number)=>void
+  textPosition:[number,number]|null;onTextPositionChange:(x:number,y:number)=>void;
+  selectedContour:string|null;onContourSelect:(id:string)=>void
 }) {
   const [dragging,setDragging]=useState(false);
   useEffect(()=>setDragging(false),[mountEnabled,view]);
@@ -88,6 +117,9 @@ export function Viewer({preview,view,mountEnabled,mountPosition,onMountPositionC
       <directionalLight position={[-30,20,70]} intensity={1.2}/>
       <gridHelper args={[300,30,"#b6c4cd","#d0dbe0"]} rotation={[Math.PI/2,0,0]} position={[0,0,-0.35]}/>
       {preview?.parts.map((part,i)=><MeshPart key={i} part={part}/>)}
+      {preview?.inner_contours?.map(contour=><InnerContourHandle key={contour.id}
+        contour={contour} z={preview.mount_surface_z}
+        selected={selectedContour===contour.id} onSelect={onContourSelect}/>)}
       {mountEnabled && preview && preview.mount_contour?.length>2 &&
        <MountHandle contour={preview.mount_contour}
         fraction={mountPosition??preview.mount_fraction??0}

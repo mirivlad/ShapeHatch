@@ -99,3 +99,12 @@ background:#eff8f3;border:1px solid #cee5da;border-radius:8px;margin:10px 0}
 .workspace{height:auto;min-height:calc(100dvh - 65px);display:flex;flex-direction:column}.sidebar{order:2}.settings-scroll{overflow:visible}.editor-main{order:1}.scene{height:370px;flex:none}.export-panel{align-items:flex-start;flex-direction:column}.gallery-page{padding:30px 17px}.saved-grid{grid-template-columns:1fr}.page-heading{flex-direction:column;align-items:flex-start}}
 
 .gallery-filters{display:flex;gap:7px;flex-wrap:wrap;margin:27px 0 0}.gallery-filters button{background:#eef5f2;color:#6a8b7f;border:1px solid #ddebe5;padding:10px 16px;border-radius:8px;font-size:12px;font-weight:800}.gallery-filters button.selected{background:#368d73;color:white;border-color:#368d73}
+
+/* Separately selectable enclosed contours in raster/SVG silhouettes. */
+.contour-row{border:1px solid #dceae6;border-radius:10px;padding:10px 12px;margin:10px 0;background:#fbfdfc}
+.contour-row.active{border-color:#55a48e;background:#f0faf4;box-shadow:0 0 0 1px #8fd6b855}
+.contour-select{border:0;padding:4px 0 8px;background:transparent;color:#35575c;font-size:12px;font-weight:800;display:flex;align-items:center;gap:8px;width:100%;text-align:left}
+.contour-select svg{margin-left:auto;color:#35896d}
+.contour-marker{height:23px;width:23px;border-radius:6px;background:#e0f1e8;color:#2c7d65;display:grid;place-items:center;font-size:12px}
+.contour-row .field{margin:8px 0}
+.contour-row .color-field{max-width:220px}

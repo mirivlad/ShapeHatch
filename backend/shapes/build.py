@@ -1,9 +1,9 @@
 """Generate watertight printable meshes and perimeter-based drag anchors."""
 from .geometry import plate_parts, plate_shape, silhouette_parts
-from .image_trace import trace_silhouette
+from .image_trace import trace_artwork
 from .mounts import (combine_upright, contour_samples, flat_mount, mount_placement,
                      primary_outline, upright_eyelet)
-from .schemas import GenerateRequest, Preview
+from .schemas import GenerateRequest, Preview, InnerContourPreview
 from .text_render import text_geometry
 
 
@@ -11,6 +11,7 @@ def generate(request: GenerateRequest) -> Preview:
     current_fraction = None
     text_bounds = None
     text_surface_z = 0.0
+    inner_previews = []
     if request.kind == "silhouette":
         if request.silhouette is None:
             raise ValueError("Не заданы параметры силуэта.")
@@ -20,22 +21,41 @@ def generate(request: GenerateRequest) -> Preview:
                                if upright else options.thickness_mm)
         geometry_options = options.model_copy(
             update={"thickness_mm": effective_thickness, "attach_loop": False})
-        shape = trace_silhouette(options)
+        shape, enclosed = trace_artwork(options)
+        styles = {item.id: item for item in options.inner_contours}
+        voids = []
+        colored = []
+        for contour_id, area in enclosed:
+            item = styles.get(contour_id)
+            fill = item.fill if item else ("empty" if options.mode == "cutouts" else "same")
+            if fill == "empty":
+                voids.append(area)
+            elif fill == "other":
+                colored.append((area, item.color))
+            # The area is already inside the fully filled exterior silhouette.
+            if hasattr(area, "exterior"):
+                points = [[round(float(x), 3), round(float(y), 3)]
+                          for x, y in list(area.exterior.coords)[:-1]]
+                inner_previews.append(InnerContourPreview(
+                    id=contour_id, points=points, fill=fill))
+        if voids:
+            from shapely.ops import unary_union
+            shape = shape.difference(unary_union(voids)).buffer(0)
         outline = primary_outline(shape)
         if options.attach_loop:
             anchor, normal, tangent, current_fraction = mount_placement(
                 outline, options.loop_contour_t, options.loop_side, options.loop_position)
             if upright:
-                parts, warnings = silhouette_parts(shape, geometry_options)
+                parts, warnings = silhouette_parts(shape, geometry_options, colored)
                 ear = upright_eyelet(anchor, normal, tangent, effective_thickness,
                                     options.loop_hole_mm, options.loop_wall_mm, options.color)
                 parts = combine_upright(parts, ear, 1, "Силуэт с петелькой", options.color)
             else:
                 shape = flat_mount(shape, anchor, normal,
                                    options.loop_hole_mm, options.loop_wall_mm, "loop")
-                parts, warnings = silhouette_parts(shape, geometry_options)
+                parts, warnings = silhouette_parts(shape, geometry_options, colored)
         else:
-            parts, warnings = silhouette_parts(shape, geometry_options)
+            parts, warnings = silhouette_parts(shape, geometry_options, colored)
     elif request.kind == "plate":
         if request.plate is None:
             raise ValueError("Не заданы параметры плашки.")
@@ -55,7 +75,7 @@ def generate(request: GenerateRequest) -> Preview:
         text = text_geometry(options)
         text_bounds = [round(float(v), 3) for v in text.bounds]
         text_surface_z = effective_thickness + (options.text_depth_mm if options.text_style == "raised" else 0)
-        if not shape.buffer(-0.25).covers(text):
+        if not shape.buffer(-max(0.25, geometry_options.top_round_mm + 0.1)).covers(text):
             raise ValueError("Надпись выходит за границы основы или пересекает отверстие. Измените размеры или положение.")
         parts, warnings = plate_parts(shape, text, geometry_options)
         if upright:
@@ -77,4 +97,5 @@ def generate(request: GenerateRequest) -> Preview:
     return Preview(parts=parts, size_mm=[round(v, 2) for v in bounds], warnings=warnings,
                    mount_contour=contour_samples(outline), mount_fraction=current_fraction,
                    mount_surface_z=effective_thickness,
-                   text_bounds_mm=text_bounds, text_surface_z=text_surface_z)
+                   text_bounds_mm=text_bounds, text_surface_z=text_surface_z,
+                   inner_contours=inner_previews)

@@ -6,13 +6,14 @@
 
 ## First MVP features
 
-- Silhouette from PNG, JPG, WebP or SVG: image-to-polygon, dimensions, thickness, flat loop or edge-mounted rounded post with a transverse ring hole, inversion and cutout modes.
+- Silhouette from PNG, JPG, WebP or SVG: filled or outline artwork, selectable enclosed regions (same material, inlaid second material, or through-holes), dimensions and thickness, flat loop or edge-mounted rounded post with a transverse ring hole.
+- Geometric upper-edge rounding, adjustable from 0 to 0.4 mm (default 0.3 mm), for silhouettes and plates.
 - Text plates: five shapes; 12 Cyrillic-capable fonts (DejaVu, Russo One, Play Bold, PT Sans, Lobster, Rubik Mono One, Unbounded, Comfortaa, Terminus TTF); multiline text with left/center/right alignment and adjustable line spacing; optional through-hole, flat loop or cross-drilled mounting post; embossed, inlaid, engraved text; separate colors.
 - 3D viewer with mouse orbit, pan, zoom, orthographic camera shortcuts and orientation cube. Drag the turquoise handle to snap a mount to the real external contour; drag the orange handle to move plate lettering in X/Y.
 - STL, multipart STL ZIP, grouped multicolor 3MF.
 - Single-open accordion settings in the editor (the first section opens by default); ring-hole diameter and wall thickness retained between new projects in browser localStorage.
 - Local editable gallery powered by IndexedDB (no account, no server-side gallery yet).
-- All necessary services via Docker Compose.
+- Install with Docker Compose for development, or the ready-made [Portainer Git stack](docs/PORTAINER.md) using GHCR images for manual Pull and redeploy.
 
 ## Quick start
 
@@ -21,6 +22,13 @@
     docker compose up -d --build
 
 Open **http://localhost:8086** on the machine running Docker Compose. From another device on your LAN, use **http://SERVER_IP:8086**, replacing SERVER_IP with that machine's IP address. Docker Compose publishes port 8086 on all host interfaces by default; restrict it with your firewall or bind to localhost if needed. Configure HTTPS and access controls before exposing the service to the internet.
+
+## Updating via Portainer
+
+The [Portainer stack](portainer-stack.yml) uses published `latest` images from GHCR.
+After CI passes for `main`, use **Stacks → shapehatch → Pull and redeploy**
+to pull and run the new version. Port 8086 remains unchanged. See
+[Portainer instructions](docs/PORTAINER.md).
 
 ## Development
 

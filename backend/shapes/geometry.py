@@ -21,8 +21,14 @@ def polygons(geometry):
     return []
 
 
-def extrude(geometry, z0: float, z1: float, name: str, color: str) -> MeshPart:
-    """Create indexed manifold triangles from constrained triangulation and boundary rings."""
+def extrude(geometry, z0: float, z1: float, name: str, color: str,
+            top_round_mm: float = 0.0, round_limit=None) -> MeshPart:
+    """Build a watertight extrusion with an optional true curved top edge.
+
+    The upper edge is made from four offset profiles along a quarter circle.
+    'round_limit' allows rounding the plate/silhouette perimeter without
+    altering vertical walls around colored inlays or text recesses.
+    """
     if z1 <= z0:
         raise ValueError("Высота выдавливания должна быть положительной.")
     verts: list[list[float]] = []
@@ -36,33 +42,91 @@ def extrude(geometry, z0: float, z1: float, name: str, color: str) -> MeshPart:
             verts.append(list(key))
         return indices[key]
 
+    def cap(surface, z: float, upper: bool):
+        for raw in polygons(surface):
+            for tri in polygons(constrained_delaunay_triangles(raw)):
+                pts = list(orient(tri, sign=1.0).exterior.coords)[:3]
+                if len(pts) != 3:
+                    continue
+                a, b, c = pts
+                faces.append([vertex(*a, z), vertex(*b, z), vertex(*c, z)]
+                             if upper else
+                             [vertex(*c, z), vertex(*b, z), vertex(*a, z)])
+
+    limit = round_limit if round_limit is not None else geometry
+    radius = min(float(top_round_mm), (z1-z0) * 0.8)
+    if radius < 0.0001:
+        radius = 0.0
+
+    # Keep all islands and holes: if a corner is too narrow for the requested
+    # radius, reduce the radius rather than destroy an engraving or fragment.
+    profiles = [geometry]
+    levels = [z1]
+    if radius:
+        original_topology = [(len(poly.interiors)) for poly in polygons(geometry)]
+        for _ in range(7):
+            candidate_profiles = [geometry]
+            candidate_levels = [z1-radius]
+            valid = True
+            for fraction in (0.25, 0.5, 0.75, 1.0):
+                delta = radius * (1 - (1 - fraction * fraction) ** 0.5)
+                inset = limit.buffer(-delta, quad_segs=8)
+                profile = geometry.intersection(inset)
+                if not profile.is_valid:
+                    profile = profile.buffer(0)
+                if (profile.is_empty or
+                        sorted(len(poly.interiors) for poly in polygons(profile))
+                        != sorted(original_topology)):
+                    valid = False
+                    break
+                candidate_profiles.append(profile)
+                candidate_levels.append(z1-radius+radius*fraction)
+            if valid:
+                profiles, levels = candidate_profiles, candidate_levels
+                break
+            radius *= 0.5
+        else:
+            radius = 0.0
+            profiles, levels = [geometry], [z1]
+
+    cap(geometry, z0, upper=False)
+    cap(profiles[-1], z1, upper=True)
     for raw in polygons(geometry):
         poly = orient(raw, sign=1.0)
-        if poly.area < 0.0001:
-            continue
-        triangles = constrained_delaunay_triangles(poly)
-        for tri in polygons(triangles):
-            pts = list(orient(tri, sign=1.0).exterior.coords)[:3]
-            if len(pts) != 3:
-                continue
-            a, b, c = pts
-            faces.append([vertex(*a, z1), vertex(*b, z1), vertex(*c, z1)])
-            faces.append([vertex(*c, z0), vertex(*b, z0), vertex(*a, z0)])
-        rings = [poly.exterior, *poly.interiors]
-        for ring in rings:
-            pts = list(ring.coords)
-            for a, b in zip(pts, pts[1:]):
+        for ring in [poly.exterior, *poly.interiors]:
+            for a, b in zip(ring.coords, list(ring.coords)[1:]):
+                # Only the original outer/hole edges of the rounding limit
+                # are curved. Text and color-inlay borders stay vertical.
+                fixed = (radius and
+                         limit.boundary.distance(Point((a[0]+b[0])/2,
+                                                      (a[1]+b[1])/2)) > 0.0001)
+                # Use the original edge's orientation for outward walls.
+                top = z1 if fixed else levels[0]
                 a0, b0 = vertex(*a, z0), vertex(*b, z0)
-                a1, b1 = vertex(*a, z1), vertex(*b, z1)
+                a1, b1 = vertex(*a, top), vertex(*b, top)
                 faces.append([a0, b0, b1])
                 faces.append([a0, b1, a1])
+
+    if radius:
+        for i in range(len(profiles)-1):
+            outer, inner = profiles[i], profiles[i+1]
+            band = outer.difference(inner)
+            if band.is_empty:
+                continue
+            for region in polygons(band):
+                for tri in polygons(constrained_delaunay_triangles(region)):
+                    pts = list(orient(tri, sign=1.0).exterior.coords)[:3]
+                    if len(pts) != 3:
+                        continue
+                    z_pts = [levels[i+1] if inner.boundary.distance(Point(*p)) < 0.00001
+                             else levels[i] for p in pts]
+                    faces.append([vertex(*p, z) for p, z in zip(pts, z_pts)])
 
     if not faces:
         raise ValueError("Не получилось построить замкнутую 3D-модель.")
     mesh = trimesh.Trimesh(vertices=np.array(verts), faces=np.array(faces), process=True)
     if not mesh.is_watertight or mesh.volume <= 0:
-        raise ValueError("Не удалось создать корректную сетку. Измените параметры.")
-    # Export the cleaned, consistently wound geometry.
+        raise ValueError("Не удалось создать корректную сетку. Измените параметры скругления.")
     return MeshPart(name=name, color=color,
                     vertices=mesh.vertices.round(6).tolist(), faces=mesh.faces.tolist())
 
@@ -98,7 +162,7 @@ def ring_on_shape(shape, options: SilhouetteOptions):
     return connected.difference(opening).buffer(0)
 
 
-def silhouette_parts(shape, options: SilhouetteOptions):
+def silhouette_parts(shape, options: SilhouetteOptions, color_inlays=None):
     warnings = []
     if options.attach_loop:
         shape = ring_on_shape(shape, options)
@@ -106,7 +170,25 @@ def silhouette_parts(shape, options: SilhouetteOptions):
         warnings.append("Есть несвязанные фрагменты — они будут печататься отдельно.")
     if shape.minimum_clearance < 0.8:
         warnings.append("В модели есть детали или зазоры уже 0,8 мм — проверьте прочность.")
-    return [extrude(shape, 0, options.thickness_mm, "Силуэт", options.color)], warnings
+    inlays = color_inlays or []
+    if not inlays:
+        return [extrude(shape, 0, options.thickness_mm, "Силуэт", options.color,
+                        options.top_round_mm)], warnings
+    depth = min(options.inlay_depth_mm, options.thickness_mm - 0.3)
+    inserts = unary_union([area for area, color in inlays])
+    if not shape.buffer(-max(0.1, options.top_round_mm + 0.08)).covers(inserts):
+        raise ValueError("Цветная вставка слишком близка к внешнему краю.")
+    upper = shape.difference(inserts)
+    parts = [
+        extrude(shape, 0, options.thickness_mm - depth, "Силуэт, нижний слой", options.color),
+        extrude(upper, options.thickness_mm - depth, options.thickness_mm,
+                "Силуэт, верхний слой", options.color,
+                options.top_round_mm, round_limit=shape),
+    ]
+    parts.extend(extrude(area, options.thickness_mm - depth, options.thickness_mm,
+                         f"Вставка {i+1}", color)
+                 for i, (area, color) in enumerate(inlays))
+    return parts, warnings
 
 
 def plate_shape(opts: PlateOptions):
@@ -184,12 +266,13 @@ def plate_parts(base_shape, text_shape, opts: PlateOptions):
         raise ValueError("Текст не помещается на основу.")
     if opts.text_style == "raised":
         return [
-            extrude(base_shape, 0, t, "Основа", opts.base_color),
+            extrude(base_shape, 0, t, "Основа", opts.base_color, opts.top_round_mm),
             extrude(text_shape, t, t+depth, "Надпись", opts.text_color)
         ], warnings
     lower = extrude(base_shape, 0, t-depth, "Основа, нижний слой", opts.base_color)
     upper_shape = base_shape.difference(text_shape)
-    upper = extrude(upper_shape, t-depth, t, "Основа, верхний слой", opts.base_color)
+    upper = extrude(upper_shape, t-depth, t, "Основа, верхний слой", opts.base_color,
+                    opts.top_round_mm, round_limit=base_shape)
     if opts.text_style == "inlay":
         letters = extrude(text_shape, t-depth, t, "Цветная вставка", opts.text_color)
         return [lower, upper, letters], warnings
