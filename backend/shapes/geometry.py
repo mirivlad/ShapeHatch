@@ -128,7 +128,7 @@ def _compute_extrusion(geometry, z0: float, z1: float, name: str, color: str,
         raise ValueError("Не получилось построить замкнутую 3D-модель.")
     mesh = trimesh.Trimesh(vertices=np.array(verts), faces=np.array(faces), process=True)
     if not mesh.is_watertight or mesh.volume <= 0:
-        raise ValueError("Не удалось создать корректную сетку. Измените параметры скругления.")
+        raise ValueError("Не удалось создать замкнутую сетку детали. Проверьте контуры изображения.")
     return MeshPart(name=name, color=color,
                     vertices=mesh.vertices.round(6).tolist(), faces=mesh.faces.tolist())
 
@@ -138,15 +138,80 @@ def _cached_extrusion(geometry_wkb: bytes, z0: float, z1: float,
                       radius: float, limit_wkb: bytes | None):
     geometry = wkb.loads(geometry_wkb)
     limit = wkb.loads(limit_wkb) if limit_wkb is not None else None
-    part = _compute_extrusion(geometry,z0,z1,"cache","#000000",radius,limit)
-    return part.vertices,part.faces
+    # A single material can contain many disjoint islands. Two islands may
+    # meet only at a corner (diagonal pixel neighbors). Merging their vertex
+    # indices makes otherwise valid 3D shells non-manifold. Keep one indexed
+    # shell per connected polygon, even when coordinates happen to coincide.
+    pieces = polygons(geometry)
+    if not pieces:
+        raise ValueError("В контуре не осталось печатаемых областей.")
+
+    vertices, faces = [], []
+    # Detect exact corner contacts between separately valid islands. Even
+    # when each shell is watertight, slicers that weld duplicate positions
+    # could turn a touching corner into a non-manifold vertex/edge.
+    owners: dict[tuple[float, float], int] = {}
+    corner_touching: set[int] = set()
+    for index, poly in enumerate(pieces):
+        for ring in [poly.exterior, *poly.interiors]:
+            for x, y in list(ring.coords)[:-1]:
+                point = (round(float(x), 6), round(float(y), 6))
+                previous = owners.setdefault(point, index)
+                if previous != index:
+                    corner_touching.update((index, previous))
+    for index, piece in enumerate(pieces):
+        if index in corner_touching:
+            # Two tenth-micrometre offsets produce a gap far below typical
+            # slicer/print tolerances, but make the shells independent even
+            # if the slicer welds all coincident coordinates.
+            inset=piece.buffer(-0.0001,join_style=2)
+            if not inset.is_empty and inset.area>piece.area*0.995:
+                piece=inset
+        # GEOS can represent two picture holes that kiss at exactly one pixel
+        # corner as a valid single polygon. Such a boundary extrudes into a
+        # non-manifold vertical edge used by four faces. A microscopic inward
+        # cleanup separates those holes, without changing any visible pixel.
+        repaired_parts = None
+        for cleanup in (0.0, 0.0001, 0.001, 0.003):
+            source = (piece if cleanup == 0 else
+                      piece.buffer(-cleanup, join_style=2))
+            if source.is_empty or (piece.area-source.area) > piece.area*0.005:
+                continue
+            try:
+                candidates = [_compute_extrusion(item,z0,z1,"cache","#000000",
+                                                  radius,limit)
+                              for item in polygons(source)]
+                if not candidates:
+                    continue
+            except ValueError:
+                continue
+            repaired_parts = candidates
+            break
+        if repaired_parts is None:
+            raise ValueError("В цветной области есть самокасающиеся контуры, "
+                             "которые не удалось разделить.")
+        for part in repaired_parts:
+            offset=len(vertices)
+            vertices.extend(part.vertices)
+            faces.extend([[index+offset for index in face] for face in part.faces])
+    # Process=False intentionally preserves the independent vertex indices.
+    # The geometry is an assembly of watertight printable pieces, not one
+    # connected manifold.
+    model = trimesh.Trimesh(vertices=np.asarray(vertices),faces=np.asarray(faces),
+                            process=False)
+    if not model.is_watertight or model.volume <= 0:
+        raise ValueError("Не удалось объединить замкнутые фрагменты рисунка.")
+    return vertices,faces
 
 
 def extrude(geometry, z0: float, z1: float, name: str, color: str,
             top_round_mm: float = 0.0, round_limit=None) -> MeshPart:
     """Reuse identical geometry across steps, independent of material and part name."""
-    vertices,faces=_cached_extrusion(geometry.wkb,round(z0,6),round(z1,6),
-        round(top_round_mm,6),round_limit.wkb if round_limit is not None else None)
+    try:
+        vertices,faces=_cached_extrusion(geometry.wkb,round(z0,6),round(z1,6),
+            round(top_round_mm,6),round_limit.wkb if round_limit is not None else None)
+    except ValueError as error:
+        raise ValueError(f"Деталь «{name}»: {error}") from error
     return MeshPart(name=name,color=color,vertices=vertices,faces=faces)
 
 

@@ -1,7 +1,7 @@
 """Regression coverage for wizard's shared mounts, colored images and part caching."""
 import base64
 import io
-from PIL import Image
+from PIL import Image, ImageDraw
 import unittest
 import zipfile
 from xml.etree import ElementTree as ET
@@ -157,6 +157,62 @@ class PictureMountTests(unittest.TestCase):
                 self.assertAlmostEqual(min(v[2] for v in part.vertices),0,delta=1e-5)
                 self.assertAlmostEqual(max(v[2] for v in part.vertices),0.4,delta=1e-5)
         self.assertEqual(len(result.text_bounds_mm),4)
+
+    def test_diagonal_touching_color_islands_form_closed_shells(self):
+        # Disconnected color islands can meet at a vertex. Their walls must
+        # remain separate indexed shells, not be merged into a non-manifold
+        # edge with four incident faces.
+        from shapely.geometry import MultiPolygon, box
+        from shapes.geometry import extrude
+        color=extrude(MultiPolygon([box(0,0,1,1),box(1,1,2,2)]),
+                      0,0.4,"Two diagonal islands","#FFFFFF")
+        m=trimesh.Trimesh(vertices=color.vertices,faces=color.faces,process=False)
+        self.assertTrue(m.is_watertight)
+        self.assertTrue(trimesh.Trimesh(vertices=color.vertices,faces=color.faces,
+                                       process=True).is_watertight)
+        self.assertAlmostEqual(m.volume,0.8,places=3)
+
+    def test_color_regions_with_kissing_inner_holes_export(self):
+        # An image region may contain several holes that share an exact
+        # corner. The body remains mathematically valid in 2D but must be
+        # separated by a sub-print-resolution slit in the 3D wall mesh.
+        from shapely.geometry import box
+        from shapely.ops import unary_union
+        from shapes.geometry import extrude
+        p=box(0,0,10,10).difference(unary_union([
+            box(1,1,3,3),box(3,3,5,5),box(5,5,7,7)
+        ]))
+        self.assertTrue(p.is_valid)
+        part=extrude(p,0,0.4,"Background with touching holes","#FFFFFF")
+        self.assertGreater(volume(part),0)
+
+    def test_busy_multicolor_logo_with_rounded_base(self):
+        # Regression for 422 from screenshot: 100x100 rounded plate with
+        # 1 mm corners, top-round 0.3 mm, 160 px raster, 4 colors.
+        # Multiple touching holes and disconnected color islands.
+        image=Image.new("RGB",(180,120),"white")
+        draw=ImageDraw.Draw(image)
+        for x in range(0,180,3):
+            for y in range(0,120,3):
+                if (x+y)%13<=6:
+                    draw.rectangle((x,y,x+2,y+2),
+                                   fill=(x*3%256,y*3%256,(x+y)%256))
+        raw=io.BytesIO()
+        image.save(raw,format="PNG")
+        url="data:image/png;base64,"+base64.b64encode(raw.getvalue()).decode()
+        for rounding in (0,0.3):
+            with self.subTest(rounding=rounding):
+                opts=PictureSettings(image_data=url,resolution=160,color_count=4)
+                result=plate(content_type="image",picture=opts,
+                             shape="rounded",corner_radius_mm=1,
+                             width_mm=100,height_mm=100,thickness_mm=3,
+                             top_round_mm=rounding,base_color="#000000")
+                self.assertEqual(len(result.image_palette),4)
+                self.assertEqual(len(result.parts),6)
+                for part in result.parts:
+                    volume(part)
+                archive=make_3mf(result)
+                self.assertGreater(len(archive),10000)
 
     def test_slicer_3mf_has_core_materials_and_descriptive_names(self):
         picture=PictureSettings(image_data=sample(),resolution=24,color_count=2)

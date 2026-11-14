@@ -286,7 +286,7 @@ export function App() {
    <button type="button" className="brand" onClick={()=>navigate("home")} aria-label="На главную">
     <div className="brand-icon"><Shapes size={23} strokeWidth={2.2}/></div>
     <span>Shape<span className="brand-accent">Hatch</span></span>
-    <span className="version">BETA 0.3.1</span>
+    <span className="version">BETA 0.3.2</span>
    </button>
    <nav className="top-nav">
     <button onClick={()=>navigate("home")} className={section==="home"?"active":""}>Главная</button>
@@ -677,11 +677,15 @@ export function App() {
       {editorStep===mountStep&&currentMount==="magnets"&&<span>Сиреневые ручки — магниты</span>}
       {kind==="silhouette"&&!!model?.inner_contours?.length&&<span>Нажмите на внутренний контур — его настройки</span>}</div>
      {busy&&<div className="scene-spinner"><LoaderCircle size={20} className="spin"/> Построение модели…</div>}
-     {error&&<div className="scene-error"><CircleHelp size={18}/>{error}</div>}
+     {error&&<div className="scene-error"><CircleHelp size={18}/>
+       <span>{error}{model&&<small className="stale-model-note">
+        На экране предыдущая корректная модель. Текущие изменения ещё не построены.
+       </small>}</span></div>}
     </div>
     <div className="export-panel"><div className="model-info">
-     <span className={"status "+(model?"ready":"pending")}>{model?<Check size={15}/>:<LoaderCircle size={15}/>}
-      {model?"Модель готова":error?"Нужны исправления":"Обработка"}</span>
+     <span className={"status "+(model&&!error&&!busy?"ready":"pending")}>
+      {model&&!error&&!busy?<Check size={15}/>:<LoaderCircle size={15}/>}
+      {error?"Ошибка построения":busy?"Перестроение…":model?"Модель готова":"Обработка"}</span>
      {model&&<span className="model-dims">Габариты: {model.size_mm.join(" × ")} мм</span>}
      {model?.warnings.map((warning,i)=><span className="model-warning" key={i}>{warning}</span>)}
     </div>

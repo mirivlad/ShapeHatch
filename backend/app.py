@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
@@ -8,7 +10,8 @@ from shapes.exporter import make_3mf, make_stl, make_stl_zip
 from shapes.schemas import GenerateRequest, PictureSettings
 from shapes.picture import picture_summary
 
-app = FastAPI(title="ShapeHatch API", version="0.3.1")
+logger = logging.getLogger("shapehatch.geometry")
+app = FastAPI(title="ShapeHatch API", version="0.3.2")
 # In production Nginx serves frontend + /api on one origin.
 app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173"],
                    allow_credentials=False, allow_methods=["GET", "POST"],
@@ -17,7 +20,7 @@ app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173"],
 
 @app.get("/api/health")
 def health():
-    return {"ok": True, "version": "0.3.1"}
+    return {"ok": True, "version": "0.3.2"}
 
 
 @app.post("/api/preview")
@@ -25,6 +28,19 @@ def preview(request: GenerateRequest):
     try:
         return generate(request)
     except ValueError as error:
+        opts = request.plate if request.kind == "plate" else request.silhouette
+        logger.warning(
+            "Preview 422 kind=%s content=%s size_mm=%sx%s rounding_mm=%s "
+            "picture_colors=%s raster_resolution=%s: %s",
+            request.kind,
+            getattr(opts, "content_type", "-"),
+            getattr(opts, "width_mm", "-"),
+            getattr(opts, "height_mm", "-"),
+            getattr(opts, "top_round_mm", "-"),
+            getattr(getattr(opts, "picture", None), "color_count", "-"),
+            getattr(getattr(opts, "picture", None), "resolution", "-"),
+            str(error),
+        )
         raise HTTPException(status_code=422, detail=str(error)) from error
 
 

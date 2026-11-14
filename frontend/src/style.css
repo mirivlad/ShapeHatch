@@ -148,3 +148,5 @@ background:#eff8f3;border:1px solid #cee5da;border-radius:8px;margin:10px 0}
 .single-picture{grid-template-columns:1fr}
 .single-picture img{max-height:180px}
 .picture-editor .field-hint{line-height:1.45}
+
+.stale-model-note{display:block;font-size:11px;margin-top:4px;opacity:.85}
