@@ -66,6 +66,10 @@ Run backend tests in the API container:
 
 Roadmap: verify Anycubic/Orca 3MF against a real slicer, model thumbnails, per-user authentication and abuse prevention, multiple text objects, box generator. Enclosed magnets are deferred pending holding-force tests.
 
+## Numeric input (0.4.1)
+
+All editable numeric fields, including magnet X/Y coordinates, now accept both decimal dots and commas, negative values and temporary blank input. Press Enter or leave the field to normalize it; arrow up/down adjusts by the field step.
+
 ## Saved projects
 
 Click **Save project** in the editor. The complete source image and parameters are

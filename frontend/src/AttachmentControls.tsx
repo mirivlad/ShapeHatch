@@ -1,5 +1,6 @@
 import {Plus,Trash2} from "lucide-react";
 import type {MagnetSettings,MountType} from "./types";
+import {NumericField as NumberField} from "./NumericField";
 
 const modes:{value:MountType;label:string}[]=[
  {value:"none",label:"Без крепления"},
@@ -8,13 +9,6 @@ const modes:{value:MountType;label:string}[]=[
  {value:"upright",label:"Столбик с поперечным отверстием"},
  {value:"magnets",label:"Посадочные места под магниты"}
 ];
-function NumberField({label,value,min,max,step=0.1,onChange}:{
- label:string;value:number;min:number;max:number;step?:number;onChange:(v:number)=>void
-}){
- return <label className="field"><span>{label}</span><input type="number"
-  min={min} max={max} step={step} value={value}
-  onChange={e=>{const v=Number(e.target.value);if(Number.isFinite(v))onChange(v);}}/></label>;
-}
 export function AttachmentControls({type,onTypeChange,hole,wall,onHole,onWall,magnets,onMagnets}:{
  type:MountType;onTypeChange:(v:MountType)=>void;
  hole:number;wall:number;onHole:(v:number)=>void;onWall:(v:number)=>void;

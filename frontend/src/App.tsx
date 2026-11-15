@@ -8,6 +8,7 @@ import {
 import { Viewer, type CameraView } from "./Viewer";
 import { goatDataUrl, initialPicture, initialPlate, initialSilhouette } from "./sample";
 import { AttachmentControls } from "./AttachmentControls";
+import { NumericField as NumberInput } from "./NumericField";
 import { getProjects, removeProject, saveProject } from "./storage";
 import { deleteGalleryProject, getGalleryKey, getGalleryProject, listGalleryProjects,
  putGalleryProject, restoreGalleryKey } from "./galleryApi";
@@ -15,14 +16,6 @@ import { loadMountPreferences, storeMountPreferences } from "./mountPreferences"
 import type { InnerContourSetting, Plate, Preview, Project, Section, Silhouette,
  MagnetSettings, MountType, PicturePreview, PictureSettings } from "./types";
 
-function NumberInput({ label, value, onChange, min, max, step=0.1 }: {
-  label:string; value:number; onChange:(value:number)=>void; min?:number; max?:number; step?:number
-}) {
-  return <label className="field"><span>{label}</span>
-    <input type="number" value={value} min={min} max={max} step={step}
-      onChange={e=>{const n=Number(e.target.value);if(Number.isFinite(n))onChange(n);}}/>
-  </label>;
-}
 function OptionSelect({label,value,options,onChange}:{
  label:string; value:string; options:{value:string;label:string}[]; onChange:(v:string)=>void
 }) {
@@ -374,7 +367,7 @@ export function App() {
    <button type="button" className="brand" onClick={()=>navigate("home")} aria-label="На главную">
     <div className="brand-icon"><Shapes size={23} strokeWidth={2.2}/></div>
     <span>Shape<span className="brand-accent">Hatch</span></span>
-    <span className="version">BETA 0.4.0</span>
+    <span className="version">BETA 0.4.1</span>
    </button>
    <nav className="top-nav">
     <button onClick={()=>navigate("home")} className={section==="home"?"active":""}>Главная</button>

@@ -12,6 +12,8 @@ jobs:
           node-version: "22"
       - run: npm install
         working-directory: frontend
+      - run: npm run test:numeric
+        working-directory: frontend
       - run: npm run build
         working-directory: frontend
   backend:

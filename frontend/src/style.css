@@ -51,7 +51,7 @@ background:transparent;border:0;color:#315059;font-size:14px;font-weight:800;tex
 .accordion-header:focus-visible{outline:2px solid #4c9f86;outline-offset:-3px;border-radius:7px}
 .accordion-body{padding:0 0 19px}
 .field{display:flex;flex-direction:column;gap:7px;margin:11px 0;font-size:12px;font-weight:700;color:#687f86;min-width:0}
-.field input[type=number],.field select,.field textarea,.project-label input{background:#fbfdfc;border:1px solid #dce7e7;border-radius:8px;padding:9px 10px;width:100%;outline:none;color:#29444d;min-width:0;font-size:13px}
+.field input[type=number],.field input.numeric-input,.field select,.field textarea,.project-label input{background:#fbfdfc;border:1px solid #dce7e7;border-radius:8px;padding:9px 10px;width:100%;outline:none;color:#29444d;min-width:0;font-size:13px}
 .field input:focus,.field select:focus,.field textarea:focus,.project-label input:focus{border-color:#51ac91}
 .mount-instructions{font-size:11px;line-height:1.6;padding:10px 12px;color:#277866;
 background:#eff8f3;border:1px solid #cee5da;border-radius:8px;margin:10px 0}
