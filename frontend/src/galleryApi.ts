@@ -4,7 +4,7 @@ const KEY_NAME="shapehatch-gallery-recovery-key";
 const KEY_FORMAT=/^[a-f0-9]{64}$/i;
 
 export type GallerySummary={
- id:string; name:string; kind:"silhouette"|"plate"; updatedAt:string;
+ id:string; name:string; kind:"silhouette"|"plate"|"box"; updatedAt:string;
  contentType?:string;
 };
 

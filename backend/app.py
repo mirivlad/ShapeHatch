@@ -13,7 +13,7 @@ from shapes.schemas import GenerateRequest, PictureSettings
 from shapes.picture import picture_summary
 
 logger = logging.getLogger("shapehatch.geometry")
-app = FastAPI(title="ShapeHatch API", version="0.4.1")
+app = FastAPI(title="ShapeHatch API", version="0.5.0")
 # In production Nginx serves frontend + /api on one origin.
 app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173"],
                    allow_credentials=False, allow_methods=["GET", "POST", "PUT", "DELETE"],
@@ -22,7 +22,7 @@ app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173"],
 
 @app.get("/api/health")
 def health():
-    return {"ok": True, "version": "0.4.1"}
+    return {"ok": True, "version": "0.5.0"}
 
 
 @app.post("/api/preview")
@@ -30,7 +30,8 @@ def preview(request: GenerateRequest):
     try:
         return generate(request)
     except ValueError as error:
-        opts = request.plate if request.kind == "plate" else request.silhouette
+        opts = {"plate": request.plate, "silhouette": request.silhouette,
+                "box": request.box}[request.kind]
         logger.warning(
             "Preview 422 kind=%s content=%s size_mm=%sx%s rounding_mm=%s "
             "picture_colors=%s raster_resolution=%s: %s",

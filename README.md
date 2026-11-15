@@ -4,10 +4,20 @@
 
 [Документация на русском](docs/README.ru.md)
 
-## Features — current version 0.4.1
+## Features — current version 0.5.0
 
 ShapeHatch is an open-source workshop for making printable models, from simple
 keychains to multicolor signs. Built for experimenting and sharing designs.
+
+### What's new in 0.5.x
+
+- **0.5.0 — Parametric boxes.** Generate an open-top storage box, a box with a
+  removable slip-over lid, or a box with integral grid dividers. Configure
+  outer dimensions, floor and wall thickness, corner radius, divider grid,
+  lid skirt and fit clearance. Body and dividers form a single watertight mesh;
+  a lid is exported as a separate watertight part placed beside the box in a
+  printable orientation. The generator reuses preview, STL/3MF exports and
+  persistent project galleries.
 
 ### What's new in 0.4.x
 
@@ -188,7 +198,7 @@ Run backend tests in the API container:
 - SVG sanitization is intentionally strict; external resources and active scripts are rejected. Keep the API isolated and resource-limited.
 - The eight extra bundled fonts are licensed under SIL OFL 1.1; see [font attribution and license copies](backend/fonts/README.md). Text with narrow strokes (especially Terminus) must be verified before printing.
 
-Roadmap: verify Anycubic/Orca 3MF against a real slicer, model thumbnails, per-user authentication and abuse prevention, multiple text objects, box generator. Enclosed magnets are deferred pending holding-force tests.
+Roadmap: verify Anycubic/Orca 3MF against a real slicer, vase generator, more box lid designs, model thumbnails, per-user authentication and abuse prevention, multiple text objects. Enclosed magnets are deferred pending holding-force tests.
 
 ## Saved projects
 

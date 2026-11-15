@@ -44,8 +44,10 @@ def validate_project(data: object, project_id: str) -> tuple[str, str, str, str]
     if not isinstance(name, str) or not (1 <= len(name.strip()) <= 120):
         raise HTTPException(status_code=422, detail="Название должно содержать 1–120 символов.")
     kind = data.get("kind")
-    if kind not in ("plate", "silhouette"):
+    if kind not in ("plate", "silhouette", "box"):
         raise HTTPException(status_code=422, detail="Неизвестный генератор.")
+    if kind == "box" and not isinstance(data.get("box"), dict):
+        raise HTTPException(status_code=422, detail="Нет параметров коробочки.")
     if kind == "plate" and not isinstance(data.get("plate"), dict):
         raise HTTPException(status_code=422, detail="Нет параметров таблички.")
     if kind == "silhouette" and not isinstance(data.get("silhouette"), dict):

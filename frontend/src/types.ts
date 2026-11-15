@@ -1,4 +1,4 @@
-export type Section = "home" | "silhouette" | "plate" | "gallery";
+export type Section = "home" | "silhouette" | "plate" | "box" | "gallery";
 export type Vec3 = [number,number,number];
 export type Part = { name:string; color:string; vertices:Vec3[]; faces:Vec3[] };
 export type InnerContourSetting = {id:string; fill:"same"|"other"|"empty"; color:string};
@@ -43,4 +43,12 @@ export type Plate = {
  text_depth_mm:number; text_style:"raised"|"inlay"|"engraved";
  base_color:string; text_color:string;
 };
-export type Project = {id:string; name:string; kind:"silhouette"|"plate"; updatedAt:string; silhouette?:Silhouette; plate?:Plate};
+export type BoxOptions={
+ mode:"open"|"lid"|"divided";
+ width_mm:number;depth_mm:number;height_mm:number;wall_mm:number;bottom_mm:number;
+ corner_radius_mm:number;columns:number;rows:number;divider_mm:number;
+ lid_clearance_mm:number;lid_wall_mm:number;lid_top_mm:number;lid_skirt_mm:number;
+ body_color:string;lid_color:string;
+};
+export type Project = {id:string; name:string; kind:"silhouette"|"plate"|"box";
+ updatedAt:string; silhouette?:Silhouette; plate?:Plate; box?:BoxOptions};

@@ -7,6 +7,7 @@ an earlier wizard step invalidates only parts whose inputs really changed.
 from shapely.ops import unary_union
 
 from .attachments import prepare_mount, mount_spec, finish_post, cut_magnet_pockets
+from .boxes import build_box
 from .geometry import extrude, plate_parts, plate_shape, silhouette_parts
 from .image_trace import trace_artwork
 from .mounts import contour_samples
@@ -17,6 +18,10 @@ from .text_render import text_geometry
 
 
 def generate(request:GenerateRequest)->Preview:
+    if request.kind == "box":
+        if request.box is None:
+            raise ValueError("Не заданы параметры коробочки.")
+        return build_box(request.box)
     current_fraction=None
     text_bounds=None
     text_surface_z=0.0

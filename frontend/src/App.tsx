@@ -6,14 +6,15 @@ import {
   type LucideIcon
 } from "lucide-react";
 import { Viewer, type CameraView } from "./Viewer";
-import { goatDataUrl, initialPicture, initialPlate, initialSilhouette } from "./sample";
+import { goatDataUrl, initialPicture, initialPlate, initialSilhouette, initialBox } from "./sample";
+import { BoxControls } from "./BoxControls";
 import { AttachmentControls } from "./AttachmentControls";
 import { NumericField as NumberInput } from "./NumericField";
 import { getProjects, removeProject, saveProject } from "./storage";
 import { deleteGalleryProject, getGalleryKey, getGalleryProject, listGalleryProjects,
  putGalleryProject, restoreGalleryKey } from "./galleryApi";
 import { loadMountPreferences, storeMountPreferences } from "./mountPreferences";
-import type { InnerContourSetting, Plate, Preview, Project, Section, Silhouette,
+import type { BoxOptions, InnerContourSetting, Plate, Preview, Project, Section, Silhouette,
  MagnetSettings, MountType, PicturePreview, PictureSettings } from "./types";
 
 function OptionSelect({label,value,options,onChange}:{
@@ -50,7 +51,7 @@ const views:{id:CameraView;label:string}[]=[
  {id:"left",label:"Слева"},{id:"right",label:"Справа"},{id:"bottom",label:"Снизу"}];
 
 type SavedEntry={
- id:string; name:string; kind:"silhouette"|"plate"; updatedAt:string;
+ id:string; name:string; kind:"silhouette"|"plate"|"box"; updatedAt:string;
  source:"server"|"browser"; contentType?:string;
 };
 
@@ -63,6 +64,7 @@ export function App() {
  const [plate,setPlate]=useState<Plate>(()=>({
   ...initialPlate,mount_hole_mm:mountPrefs.holeMm,mount_wall_mm:mountPrefs.wallMm
  }));
+ const [box,setBox]=useState<BoxOptions>({...initialBox});
  const [openGroup,setOpenGroup]=useState("image");
  const [editorStep,setEditorStep]=useState(0);
  const [picturePreview,setPicturePreview]=useState<PicturePreview|null>(null);
@@ -77,7 +79,7 @@ export function App() {
  const [error,setError]=useState("");
  const [toast,setToast]=useState("");
  const [projects,setProjects]=useState<SavedEntry[]>([]);
- const [galleryFilter,setGalleryFilter]=useState<"all"|"silhouette"|"plate">("all");
+ const [galleryFilter,setGalleryFilter]=useState<"all"|"silhouette"|"plate"|"box">("all");
  const [projectId,setProjectId]=useState<string|null>(null);
  const [projectName,setProjectName]=useState("");
  const changeSilhouette=<K extends keyof Silhouette>(key:K,value:Silhouette[K])=>{
@@ -96,6 +98,8 @@ export function App() {
   });
  };
  const selectContour=(id:string)=>{setSelectedContour(id);setEditorStep(1);setOpenGroup("contours");};
+ const changeBox=<K extends keyof BoxOptions>(key:K,value:BoxOptions[K])=>
+  setBox(prev=>({...prev,[key]:value}));
  const changePlate=<K extends keyof Plate>(key:K,value:Plate[K])=>{
   setPlate(prev=>({...prev,[key]:value}));
   if(key==="content_type")setModel(null);
@@ -112,15 +116,19 @@ export function App() {
  };
  const silhouetteMount:MountType=silhouette.mount_type??(
   silhouette.attach_loop?(silhouette.loop_orientation==="upright"?"upright":"loop"):"none");
- const currentMount:MountType=section==="silhouette"?silhouetteMount:plate.mount_type;
+ const currentMount:MountType=section==="box"?"none":section==="silhouette"?silhouetteMount:plate.mount_type;
  const pictureMode=section==="plate"&&plate.content_type==="image";
- const wizardSteps=section==="silhouette"
+ const wizardSteps=section==="box"
+  ?["Габариты","Исполнение","Экспорт"]
+  :section==="silhouette"
   ?["Силуэт","Внутренние контуры","Размеры","Крепление","Экспорт"]
   :pictureMode
   ?["Содержимое","Основа","Картинка и масштаб","Оптимизация цветов","Крепление","Экспорт"]
   :["Содержимое","Текст","Основа и размещение","Крепление","Экспорт"];
- const mountStep=pictureMode?4:3;
- const groupFor=(step:number):string=>section==="silhouette"
+ const mountStep=section==="box"?-1:pictureMode?4:3;
+ const groupFor=(step:number):string=>section==="box"
+  ?["box-dimensions","box-options","export"][step]
+  :section==="silhouette"
   ?["image","contours","dimensions","loop","export"][step]
   :pictureMode
   ?["content","base","picture","colors","mount","export"][step]
@@ -158,12 +166,13 @@ export function App() {
   return ()=>{clearTimeout(timeout);controller.abort();};
  },[section,plate.content_type,pictureProcessingKey]);
 
- const isEditor=section==="silhouette"||section==="plate";
+ const isEditor=section==="silhouette"||section==="plate"||section==="box";
  const visibleProjects=projects.filter(p=>galleryFilter==="all"||p.kind===galleryFilter);
- const kind=section==="plate"?"plate":"silhouette";
+ const kind=section==="plate"?"plate":section==="box"?"box":"silhouette";
  const request=useCallback(()=> section==="plate"
   ?{kind:"plate",plate}
-  :{kind:"silhouette",silhouette},[section,plate,silhouette]);
+  :section==="box"?{kind:"box",box}
+  :{kind:"silhouette",silhouette},[section,plate,box,silhouette]);
 
  useEffect(()=>{
   if(!isEditor) return;
@@ -209,15 +218,17 @@ export function App() {
  }
  function navigate(next:Section) {
   setSection(next);setModel(null);setError("");setEditorStep(0);
-  if(next==="plate"||next==="silhouette")setOpenGroup(next==="plate"?"content":"image");
+  if(next==="plate"||next==="silhouette"||next==="box")
+   setOpenGroup(next==="plate"?"content":next==="box"?"box-dimensions":"image");
   if(next==="gallery")void refreshGallery();
  }
- function create(next:"silhouette"|"plate") {
+ function create(next:"silhouette"|"plate"|"box") {
   setSelectedContour(null);
   setProjectId(null);
   setProjectName("");
   setSilhouette({...initialSilhouette,loop_hole_mm:mountPrefs.holeMm,loop_wall_mm:mountPrefs.wallMm});
   setPlate({...initialPlate,mount_hole_mm:mountPrefs.holeMm,mount_wall_mm:mountPrefs.wallMm});
+  setBox({...initialBox});
   setView("iso");
   navigate(next);
  }
@@ -253,12 +264,12 @@ export function App() {
  async function save() {
   if(!isEditor) return;
   const id=projectId??crypto.randomUUID();
-  const name=projectName.trim() || (kind==="plate"
+  const name=projectName.trim() || (kind==="box"?"Коробочка":kind==="plate"
    ?(plate.content_type==="image"?plate.picture.filename.replace(/\.[^.]+$/,""):
      plate.text.replace(/\s+/g," ").trim())
    :silhouette.filename.replace(/\.[^.]+$/,""));
   const entry:Project={id,name,kind,updatedAt:new Date().toISOString(),
-   ...(kind==="plate"?{plate}:{silhouette})};
+   ...(kind==="plate"?{plate}:kind==="box"?{box}:{silhouette})};
   try {
    await saveProject(entry);
    setProjectId(id);setProjectName(name);
@@ -281,7 +292,8 @@ export function App() {
  }
  function loadProject(item:Project) {
   setSelectedContour(null);
-  if(item.kind==="plate"&&item.plate){
+  if(item.kind==="box"&&item.box)setBox({...initialBox,...item.box});
+  else if(item.kind==="plate"&&item.plate){
    const legacy={...initialPicture,...(item.plate.picture??{})};
    if(legacy.algorithm==="floyd"){legacy.algorithm="median";legacy.dithering="floyd";}
    setPlate({...initialPlate,...item.plate,picture:legacy});
@@ -327,7 +339,8 @@ export function App() {
    const item=summary.source==="server"?
     await getGalleryProject(summary.id):(await getProjects()).find(p=>p.id===summary.id);
    if(!item)throw new Error("Проект не найден.");
-   const payload=item.kind==="plate"?{kind:"plate",plate:item.plate}:{kind:"silhouette",silhouette:item.silhouette};
+   const payload=item.kind==="plate"?{kind:"plate",plate:item.plate}:
+    item.kind==="box"?{kind:"box",box:item.box}:{kind:"silhouette",silhouette:item.silhouette};
    const response=await fetch("/api/export/"+format,{
     method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)
    });
@@ -367,7 +380,7 @@ export function App() {
    <button type="button" className="brand" onClick={()=>navigate("home")} aria-label="На главную">
     <div className="brand-icon"><Shapes size={23} strokeWidth={2.2}/></div>
     <span>Shape<span className="brand-accent">Hatch</span></span>
-    <span className="version">BETA 0.4.1</span>
+    <span className="version">BETA 0.5.0</span>
    </button>
    <nav className="top-nav">
     <button onClick={()=>navigate("home")} className={section==="home"?"active":""}>Главная</button>
@@ -400,9 +413,16 @@ export function App() {
       <p>Текст или многоцветная картинка, произвольная основа, крепление и магниты.</p>
       <span className="card-action">Открыть генератор <Plus size={17}/></span></div>
     </button>
+    <button className="generator-card" onClick={()=>create("box")}>
+     <div className="card-art box-art"><div className="box-illustration"><Box size={88} strokeWidth={1.1}/></div></div>
+     <div className="card-detail"><div className="card-icon"><Box size={23}/></div>
+      <h3>Коробочка</h3>
+      <p>Открытая коробочка, съёмная крышка или отделения. Размеры и толщина стенок под ваш принтер.</p>
+      <span className="card-action">Открыть генератор <Plus size={17}/></span></div>
+    </button>
     <div className="generator-card future-card">
-     <div className="future-icon"><Box size={32}/></div><span className="soon">В РАЗРАБОТКЕ</span>
-     <h3>Больше генераторов</h3><p>Вазы, коробки, корпуса, органайзеры и другие параметрические модели — в следующих версиях.</p>
+     <div className="future-icon"><Layers3 size={32}/></div><span className="soon">В РАЗРАБОТКЕ</span>
+     <h3>Больше генераторов</h3><p>Вазы, корпуса, органайзеры и другие параметрические модели — в следующих версиях.</p>
     </div>
    </div>
    <footer className="footer">ShapeHatch · Сделано для творчества и 3D-печати · Open source</footer>
@@ -419,14 +439,15 @@ export function App() {
    <div className="gallery-filters">
     <button className={galleryFilter==="all"?"selected":""} onClick={()=>setGalleryFilter("all")}>Все проекты</button>
     <button className={galleryFilter==="silhouette"?"selected":""} onClick={()=>setGalleryFilter("silhouette")}>Силуэты</button>
-    <button className={galleryFilter==="plate"?"selected":""} onClick={()=>setGalleryFilter("plate")}>Надписи</button>
+    <button className={galleryFilter==="plate"?"selected":""} onClick={()=>setGalleryFilter("plate")}>Таблички</button>
+    <button className={galleryFilter==="box"?"selected":""} onClick={()=>setGalleryFilter("box")}>Коробочки</button>
    </div>
    {visibleProjects.length===0?<div className="empty-gallery"><FolderOpen size={45}/><h3>Пока нет сохранённых моделей</h3>
     <p>Создайте изделие и нажмите «Сохранить проект» в редакторе.</p>
     <button className="primary-btn" onClick={()=>navigate("home")}>Выбрать генератор</button></div>:
     <div className="saved-grid">{visibleProjects.map(item=><article className="saved-card" key={item.id}>
-      <div className="saved-art">{item.kind==="plate"?<Type size={46}/>:<FileImage size={46}/>}</div>
-      <div className="saved-info"><span className="eyebrow">{item.kind==="plate"?(item.contentType==="image"?"ТАБЛИЧКА С КАРТИНКОЙ":"ТАБЛИЧКА"):"СИЛУЭТ"}</span>
+      <div className="saved-art">{item.kind==="plate"?<Type size={46}/>:item.kind==="box"?<Box size={46}/>:<FileImage size={46}/>}</div>
+      <div className="saved-info"><span className="eyebrow">{item.kind==="plate"?(item.contentType==="image"?"ТАБЛИЧКА С КАРТИНКОЙ":"ТАБЛИЧКА"):item.kind==="box"?"КОРОБОЧКА":"СИЛУЭТ"}</span>
        <h3>{item.name}</h3><small>{new Date(item.updatedAt).toLocaleString("ru-RU")}</small>
        <div className="saved-storage">{item.source==="server"?"На сервере":"Только в этом браузере"}</div>
        <div className="saved-actions">
@@ -442,8 +463,9 @@ export function App() {
   {isEditor&&<main className="workspace">
    <aside className="sidebar">
     <div className="sidebar-top"><button className="back-link" onClick={()=>navigate("home")}><ChevronLeft size={17}/> Генераторы</button>
-     <h2>{kind==="silhouette"?"Фигура по контуру":"Табличка"}</h2>
+     <h2>{kind==="silhouette"?"Фигура по контуру":kind==="box"?"Коробочка":"Табличка"}</h2>
      <p>{kind==="silhouette"?"Силуэт, внутренние контуры и крепление.":
+      kind==="box"?"Размеры, крышка и внутренние отделения.":
       "Текст или многоцветная картинка, основа и крепление."}</p>
      <div className="wizard-steps" aria-label="Шаги редактирования">
       {wizardSteps.map((name,index)=><button type="button" key={index}
@@ -474,7 +496,7 @@ export function App() {
      <p className="field-hint">Вернитесь к любому предыдущему шагу — настройки сохраняются,
       неизменённые узлы модели повторно используются из кэша.</p>
     </section>}
-    {kind==="silhouette"?<>
+    {kind==="box"?<BoxControls box={box} step={editorStep} onChange={changeBox}/>:kind==="silhouette"?<>
      {editorStep===0&&<Accordion title="Изображение" icon={ImagePlus} opened={openGroup==="image"} onToggle={()=>toggleGroup("image")}>
       <label className="upload-box"><UploadCloud size={25}/><strong>Загрузить изображение</strong>
        <small>PNG, JPG, WebP, SVG · до 5 МБ</small>
@@ -729,7 +751,7 @@ export function App() {
     </div>
     <div className="sidebar-footer">
      <label className="project-label">Название проекта
-      <input type="text" placeholder={kind==="silhouette"?"Козёл — брелок":(
+      <input type="text" placeholder={kind==="box"?"Коробочка":kind==="silhouette"?"Козёл — брелок":(
        plate.content_type==="image"?plate.picture.filename:plate.text.replace(/\s+/g," ").trim())}
        value={projectName} onChange={e=>setProjectName(e.target.value)} maxLength={120}/>
      </label>
@@ -752,7 +774,7 @@ export function App() {
        selectedContour={kind==="silhouette"?selectedContour:null}
        onContourSelect={selectContour}
        magnetEnabled={editorStep===mountStep&&currentMount==="magnets"}
-       magnetPositions={(kind==="silhouette"?silhouette.magnets:plate.magnets).positions.map(p=>[p.x_mm,p.y_mm])}
+       magnetPositions={(kind==="box"?[]:(kind==="silhouette"?silhouette.magnets:plate.magnets).positions).map(p=>[p.x_mm,p.y_mm])}
        onMagnetPositionChange={updateMagnet}
        textPosition={kind==="plate"&&editorStep===2?(
         plate.content_type==="image"?[plate.picture.x_mm,plate.picture.y_mm]:

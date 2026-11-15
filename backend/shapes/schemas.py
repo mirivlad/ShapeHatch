@@ -134,10 +134,38 @@ class PlateOptions(BaseModel):
         return value.upper()
 
 
+class BoxOptions(BaseModel):
+    """Parametric open-top storage boxes, lids and integral compartments (millimetres)."""
+    mode: Literal["open", "lid", "divided"] = "open"
+    width_mm: float = Field(default=100, ge=30, le=300)
+    depth_mm: float = Field(default=75, ge=30, le=300)
+    height_mm: float = Field(default=45, ge=12, le=200)
+    wall_mm: float = Field(default=2.4, ge=1.2, le=8)
+    bottom_mm: float = Field(default=2.4, ge=1.2, le=12)
+    corner_radius_mm: float = Field(default=7, ge=0, le=50)
+    columns: int = Field(default=2, ge=1, le=6)
+    rows: int = Field(default=2, ge=1, le=6)
+    divider_mm: float = Field(default=2, ge=1.2, le=8)
+    lid_clearance_mm: float = Field(default=0.3, ge=0.1, le=1.2)
+    lid_wall_mm: float = Field(default=2, ge=1.2, le=8)
+    lid_top_mm: float = Field(default=2.4, ge=1.2, le=8)
+    lid_skirt_mm: float = Field(default=8, ge=3, le=20)
+    body_color: Color = "#247488"
+    lid_color: Color = "#F3A953"
+
+    @field_validator("body_color", "lid_color")
+    @classmethod
+    def valid_color(cls, value: str) -> str:
+        if len(value)!=7 or value[0]!="#" or any(ch not in "0123456789ABCDEFabcdef" for ch in value[1:]):
+            raise ValueError("Цвет должен иметь формат #RRGGBB")
+        return value.upper()
+
+
 class GenerateRequest(BaseModel):
-    kind: Literal["silhouette", "plate"]
+    kind: Literal["silhouette", "plate", "box"]
     silhouette: SilhouetteOptions | None = None
     plate: PlateOptions | None = None
+    box: BoxOptions | None = None
 
 
 class MeshPart(BaseModel):
