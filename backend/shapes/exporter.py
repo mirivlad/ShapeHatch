@@ -1,5 +1,6 @@
 """3MF core + basematerials, with grouped multicolor components; and STL."""
 from io import BytesIO
+import json
 import zipfile
 from xml.etree import ElementTree as ET
 
@@ -15,10 +16,16 @@ ET.register_namespace("", CORE)
 ET.register_namespace("m", MAT)
 
 
-def make_3mf(model: Preview) -> bytes:
+def make_3mf(model: Preview, slicer_profile: str = "core") -> bytes:
+    if slicer_profile not in ("core", "orca"):
+        raise ValueError("Неизвестный профиль 3MF.")
     root = ET.Element(f"{{{CORE}}}model", {"unit": "millimeter", "xml:lang": "en-US"})
     ET.SubElement(root, f"{{{CORE}}}metadata", {"name": "Title"}).text = "ShapeHatch — изделие для печати"
     ET.SubElement(root, f"{{{CORE}}}metadata", {"name": "Application"}).text = "ShapeHatch"
+    if slicer_profile == "orca":
+        # Orca/Anycubic Slicer Next use extruder metadata, not just the
+        # standardized 3MF basematerials displaycolor palette.
+        ET.SubElement(root, f"{{{CORE}}}metadata", {"name": "BambuStudio:3mfVersion"}).text = "1"
     resources = ET.SubElement(root, f"{{{CORE}}}resources")
     colors = list(dict.fromkeys(part.color for part in model.parts))
     materials = ET.SubElement(resources, f"{{{CORE}}}basematerials", {"id": "1"})
@@ -66,6 +73,23 @@ def make_3mf(model: Preview) -> bytes:
         archive.writestr("[Content_Types].xml", content_types)
         archive.writestr("_rels/.rels", rels)
         archive.writestr("3D/3dmodel.model", ET.tostring(root, encoding="utf-8", xml_declaration=True))
+        if slicer_profile == "orca":
+            settings = ET.Element("config")
+            obj = ET.SubElement(settings, "object", {"id": str(parent_id)})
+            ET.SubElement(obj, "metadata", {"key": "name", "value": "ShapeHatch — изделие"})
+            ET.SubElement(obj, "metadata", {"key": "extruder", "value": "1"})
+            for part_id, part in enumerate(model.parts, start=2):
+                slot = colors.index(part.color) + 1
+                part_node = ET.SubElement(obj, "part", {"id": str(part_id), "subtype": "normal_part"})
+                ET.SubElement(part_node, "metadata", {"key": "name",
+                                                    "value": f"{part.name} — {part.color.upper()}"})
+                ET.SubElement(part_node, "metadata", {"key": "extruder", "value": str(slot)})
+            archive.writestr("Metadata/model_settings.config",
+                             ET.tostring(settings, encoding="utf-8", xml_declaration=True))
+            # Retain the user's printer/process presets and confirm physical slots.
+            palette = {"filament_colour": [c.upper() for c in colors]}
+            archive.writestr("Metadata/project_settings.config",
+                             json.dumps(palette, separators=(",", ":")))
     return buffer.getvalue()
 
 

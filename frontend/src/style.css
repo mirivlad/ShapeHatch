@@ -150,3 +150,10 @@ background:#eff8f3;border:1px solid #cee5da;border-radius:8px;margin:10px 0}
 .picture-editor .field-hint{line-height:1.45}
 
 .stale-model-note{display:block;font-size:11px;margin-top:4px;opacity:.85}
+
+.gallery-key-actions{display:flex;gap:10px;flex-wrap:wrap;margin:16px 0 0}
+.gallery-key-actions button{border:1px solid #d1e7db;background:#f2f9f5;color:#35755f;padding:9px 12px;border-radius:8px;font-size:12px;font-weight:700}
+.saved-storage{font-size:11px;color:#718e83;margin-top:10px}
+.saved-actions{flex-wrap:wrap;justify-content:flex-start}
+.saved-actions button{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+.exports{flex-wrap:wrap;justify-content:flex-end}

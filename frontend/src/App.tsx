@@ -9,6 +9,8 @@ import { Viewer, type CameraView } from "./Viewer";
 import { goatDataUrl, initialPicture, initialPlate, initialSilhouette } from "./sample";
 import { AttachmentControls } from "./AttachmentControls";
 import { getProjects, removeProject, saveProject } from "./storage";
+import { deleteGalleryProject, getGalleryKey, getGalleryProject, listGalleryProjects,
+ putGalleryProject, restoreGalleryKey } from "./galleryApi";
 import { loadMountPreferences, storeMountPreferences } from "./mountPreferences";
 import type { InnerContourSetting, Plate, Preview, Project, Section, Silhouette,
  MagnetSettings, MountType, PicturePreview, PictureSettings } from "./types";
@@ -54,6 +56,11 @@ const views:{id:CameraView;label:string}[]=[
  {id:"iso",label:"3D"},{id:"top",label:"Сверху"},{id:"front",label:"Спереди"},
  {id:"left",label:"Слева"},{id:"right",label:"Справа"},{id:"bottom",label:"Снизу"}];
 
+type SavedEntry={
+ id:string; name:string; kind:"silhouette"|"plate"; updatedAt:string;
+ source:"server"|"browser"; contentType?:string;
+};
+
 export function App() {
  const [section,setSection]=useState<Section>("home");
  const [mountPrefs,setMountPrefs]=useState(loadMountPreferences);
@@ -76,7 +83,7 @@ export function App() {
  const [exporting,setExporting]=useState<string|null>(null);
  const [error,setError]=useState("");
  const [toast,setToast]=useState("");
- const [projects,setProjects]=useState<Project[]>([]);
+ const [projects,setProjects]=useState<SavedEntry[]>([]);
  const [galleryFilter,setGalleryFilter]=useState<"all"|"silhouette"|"plate">("all");
  const [projectId,setProjectId]=useState<string|null>(null);
  const [projectName,setProjectName]=useState("");
@@ -188,8 +195,24 @@ export function App() {
  },[isEditor,request]);
 
  async function refreshGallery() {
-  try {setProjects(await getProjects());}
-  catch {setToast("Не удалось открыть локальную галерею.");}
+  let locals:Project[]=[];
+  try{locals=await getProjects();}
+  catch{setToast("Не удалось прочитать проекты из браузера.");}
+  const entries=new Map<string,SavedEntry>(locals.map(p=>[p.id,{
+   id:p.id,name:p.name,kind:p.kind,updatedAt:p.updatedAt,source:"browser",
+   contentType:p.plate?.content_type
+  }]));
+  try {
+   const remote=await listGalleryProjects();
+   for(const item of remote){
+    const local=entries.get(item.id);
+    if(!local||item.updatedAt>=local.updatedAt)
+     entries.set(item.id,{...item,source:"server"});
+   }
+  } catch(ex) {
+   setToast("Серверная галерея недоступна. Локальные проекты по-прежнему доступны.");
+  }
+  setProjects([...entries.values()].sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt)));
  }
  function navigate(next:Section) {
   setSection(next);setModel(null);setError("");setEditorStep(0);
@@ -243,10 +266,27 @@ export function App() {
    :silhouette.filename.replace(/\.[^.]+$/,""));
   const entry:Project={id,name,kind,updatedAt:new Date().toISOString(),
    ...(kind==="plate"?{plate}:{silhouette})};
-  try {await saveProject(entry);setProjectId(id);setProjectName(name);setToast("Проект сохранён в этом браузере.");}
-  catch {setToast("Не удалось сохранить проект. Проверьте доступность IndexedDB.");}
+  try {
+   await saveProject(entry);
+   setProjectId(id);setProjectName(name);
+   try {
+    await putGalleryProject(entry);
+    setToast("Проект сохранён на сервере и в браузере.");
+   } catch(ex) {
+    setToast("Сохранено только в браузере: "+(ex instanceof Error?ex.message:String(ex)));
+   }
+  } catch{setToast("Не удалось сохранить проект. Проверьте доступность IndexedDB.");}
  }
- function openProject(item:Project) {
+ async function openProject(summary:SavedEntry) {
+  let item:Project|undefined;
+  try {
+   item=summary.source==="server"?
+    await getGalleryProject(summary.id):(await getProjects()).find(p=>p.id===summary.id);
+  }catch(ex){setToast("Не удалось загрузить проект: "+(ex instanceof Error?ex.message:String(ex)));return;}
+  if(!item){setToast("Проект не найден.");return;}
+  loadProject(item);
+ }
+ function loadProject(item:Project) {
   setSelectedContour(null);
   if(item.kind==="plate"&&item.plate){
    const legacy={...initialPicture,...(item.plate.picture??{})};
@@ -259,12 +299,58 @@ export function App() {
      item.silhouette.loop_orientation==="upright"?"upright":"loop"):"none")});
   setProjectId(item.id);setProjectName(item.name);setView("iso");navigate(item.kind);
  }
- async function remove(id:string) {
+ async function remove(item:SavedEntry) {
   if(!window.confirm("Удалить сохранённый проект?"))return;
-  try {await removeProject(id);await refreshGallery();}
-  catch {setToast("Не удалось удалить проект.");}
+  try {
+   if(item.source==="server")await deleteGalleryProject(item.id);
+   await removeProject(item.id);
+   await refreshGallery();
+  }catch(ex){setToast("Не удалось удалить проект: "+(ex instanceof Error?ex.message:String(ex)));}
  }
- async function download(format:"3mf"|"stl"|"stl-zip") {
+ async function migrateProject(id:string) {
+  try{
+   const item=(await getProjects()).find(p=>p.id===id);
+   if(!item)throw new Error("Локальный проект не найден.");
+   await putGalleryProject(item);
+   await refreshGallery();
+   setToast("Проект перенесён на сервер.");
+  }catch(ex){setToast("Ошибка переноса: "+(ex instanceof Error?ex.message:String(ex)));}
+ }
+ async function copyGalleryKey() {
+  const key=getGalleryKey();
+  try{
+   await navigator.clipboard.writeText(key);
+   setToast("Ключ восстановления скопирован. Храните его в безопасном месте.");
+  }catch{window.prompt("Сохраните ключ восстановления галереи:",key);}
+ }
+ function recoverGallery() {
+  const key=window.prompt("Вставьте ключ доступа от вашей галереи (64 символа):");
+  if(key===null)return;
+  try{restoreGalleryKey(key);void refreshGallery();setToast("Галерея переключена на указанный ключ.");}
+  catch(ex){setToast(ex instanceof Error?ex.message:String(ex));}
+ }
+ async function downloadSaved(summary:SavedEntry,format:"3mf"|"3mf-anycubic"="3mf") {
+  try {
+   const item=summary.source==="server"?
+    await getGalleryProject(summary.id):(await getProjects()).find(p=>p.id===summary.id);
+   if(!item)throw new Error("Проект не найден.");
+   const payload=item.kind==="plate"?{kind:"plate",plate:item.plate}:{kind:"silhouette",silhouette:item.silhouette};
+   const response=await fetch("/api/export/"+format,{
+    method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)
+   });
+   if(!response.ok){
+    const body=await response.json();
+    throw new Error(body.detail||"Ошибка экспорта.");
+   }
+   const url=URL.createObjectURL(await response.blob());
+   const a=document.createElement("a");a.href=url;
+   a.download=(item.name||"shapehatch").replace(/[^a-zA-Z0-9а-яА-ЯёЁ_-]/g,"_")
+    +(format==="3mf-anycubic"?"-anycubic":"")+".3mf";
+   document.body.appendChild(a);a.click();a.remove();
+   setTimeout(()=>URL.revokeObjectURL(url),2000);
+  }catch(ex){setToast("Не удалось скачать: "+(ex instanceof Error?ex.message:String(ex)));}
+ }
+ async function download(format:"3mf"|"3mf-anycubic"|"stl"|"stl-zip") {
   if(!isEditor||!model)return;
   setExporting(format);setError("");
   try {
@@ -274,7 +360,9 @@ export function App() {
    const blob=await response.blob();
    const url=URL.createObjectURL(blob);
    const a=document.createElement("a");a.href=url;
-   a.download=(projectName.trim()||"shapehatch").replace(/[^a-zA-Z0-9а-яА-ЯёЁ_-]/g,"_")+"."+ (format==="stl-zip"?"zip":format);
+   a.download=(projectName.trim()||"shapehatch").replace(/[^a-zA-Z0-9а-яА-ЯёЁ_-]/g,"_")
+    +(format==="3mf-anycubic"?"-anycubic":"")+"."+
+    (format==="stl-zip"?"zip":format==="3mf-anycubic"?"3mf":format);
    document.body.appendChild(a);a.click();a.remove();
    setTimeout(()=>URL.revokeObjectURL(url),2000);
   } catch(ex) {setError(ex instanceof Error?ex.message:String(ex));}
@@ -286,7 +374,7 @@ export function App() {
    <button type="button" className="brand" onClick={()=>navigate("home")} aria-label="На главную">
     <div className="brand-icon"><Shapes size={23} strokeWidth={2.2}/></div>
     <span>Shape<span className="brand-accent">Hatch</span></span>
-    <span className="version">BETA 0.3.3</span>
+    <span className="version">BETA 0.4.0</span>
    </button>
    <nav className="top-nav">
     <button onClick={()=>navigate("home")} className={section==="home"?"active":""}>Главная</button>
@@ -328,9 +416,13 @@ export function App() {
   </main>}
 
   {section==="gallery"&&<main className="gallery-page">
-   <div className="page-heading"><div><span className="eyebrow">ЛОКАЛЬНЫЕ ПРОЕКТЫ</span><h1>Моя галерея</h1>
-    <p>Проекты хранятся в этом браузере. Они не загружаются на сервер.</p></div>
+   <div className="page-heading"><div><span className="eyebrow">МОИ ПРОЕКТЫ</span><h1>Моя галерея</h1>
+    <p>Сохраняются на сервере и в браузере. Для доступа с другого устройства понадобится ключ восстановления.</p></div>
     <button className="secondary-btn" onClick={()=>navigate("home")}><Plus size={18}/> Новый проект</button></div>
+   <div className="gallery-key-actions">
+    <button onClick={()=>void copyGalleryKey()}>Скопировать ключ восстановления</button>
+    <button onClick={recoverGallery}>Восстановить галерею по ключу</button>
+   </div>
    <div className="gallery-filters">
     <button className={galleryFilter==="all"?"selected":""} onClick={()=>setGalleryFilter("all")}>Все проекты</button>
     <button className={galleryFilter==="silhouette"?"selected":""} onClick={()=>setGalleryFilter("silhouette")}>Силуэты</button>
@@ -341,10 +433,16 @@ export function App() {
     <button className="primary-btn" onClick={()=>navigate("home")}>Выбрать генератор</button></div>:
     <div className="saved-grid">{visibleProjects.map(item=><article className="saved-card" key={item.id}>
       <div className="saved-art">{item.kind==="plate"?<Type size={46}/>:<FileImage size={46}/>}</div>
-      <div className="saved-info"><span className="eyebrow">{item.kind==="plate"?(item.plate?.content_type==="image"?"ТАБЛИЧКА С КАРТИНКОЙ":"ТАБЛИЧКА"):"СИЛУЭТ"}</span>
+      <div className="saved-info"><span className="eyebrow">{item.kind==="plate"?(item.contentType==="image"?"ТАБЛИЧКА С КАРТИНКОЙ":"ТАБЛИЧКА"):"СИЛУЭТ"}</span>
        <h3>{item.name}</h3><small>{new Date(item.updatedAt).toLocaleString("ru-RU")}</small>
-       <div className="saved-actions"><button onClick={()=>openProject(item)}>Открыть и изменить</button>
-       <button title="Удалить" aria-label="Удалить" onClick={()=>void remove(item.id)}><Trash2 size={16}/></button></div>
+       <div className="saved-storage">{item.source==="server"?"На сервере":"Только в этом браузере"}</div>
+       <div className="saved-actions">
+        <button onClick={()=>void openProject(item)}>Открыть и изменить</button>
+        <button onClick={()=>void downloadSaved(item)} title="Скачать стандартный 3MF"><Download size={15}/> 3MF</button>
+        <button onClick={()=>void downloadSaved(item,"3mf-anycubic")} title="Экспериментальный 3MF для Anycubic Slicer Next"><Download size={15}/> Anycubic</button>
+        {item.source==="browser"&&<button onClick={()=>void migrateProject(item.id)} title="Перенести на сервер"><UploadCloud size={15}/></button>}
+        <button title="Удалить" aria-label="Удалить" onClick={()=>void remove(item)}><Trash2 size={16}/></button>
+       </div>
       </div></article>)}</div>}
   </main>}
 
@@ -643,7 +741,7 @@ export function App() {
        value={projectName} onChange={e=>setProjectName(e.target.value)} maxLength={120}/>
      </label>
      <button className="save-btn" onClick={()=>void save()}><Save size={17}/> Сохранить проект</button>
-     <small>Сохраняется локально в вашем браузере</small>
+     <small>Сохраняется на сервере и в браузере</small>
     </div>
    </aside>
 
@@ -692,6 +790,9 @@ export function App() {
     <div className="exports">
      <button className="export-main" disabled={!model||busy||!!error||!!exporting} onClick={()=>void download("3mf")}>
       {exporting==="3mf"?<LoaderCircle size={17} className="spin"/>:<Download size={17}/>} Скачать 3MF</button>
+     <button className="export-alt" title="Экспериментальный 3MF с назначением цветов на слоты для Anycubic Slicer Next и OrcaSlicer"
+      disabled={!model||busy||!!error||!!exporting} onClick={()=>void download("3mf-anycubic")}>
+      3MF Anycubic / Orca</button>
      <button className="export-alt" disabled={!model||busy||!!error||!!exporting} onClick={()=>void download("stl")}>STL</button>
      <button className="export-alt" disabled={!model||busy||!!error||!!exporting} onClick={()=>void download("stl-zip")}>STL ZIP</button>
     </div></div>

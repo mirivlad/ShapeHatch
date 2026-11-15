@@ -7,7 +7,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
-RUN useradd -r -u 10001 shapehatch && chown -R shapehatch:shapehatch /app
+RUN useradd -r -u 10001 shapehatch && mkdir -p /data && chown -R shapehatch:shapehatch /app /data
 USER shapehatch
 EXPOSE 8000
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
