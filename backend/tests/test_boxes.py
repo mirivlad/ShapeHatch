@@ -9,9 +9,11 @@ import zipfile
 import numpy as np
 from fastapi import HTTPException
 import trimesh
+from shapely.geometry import Point
+from shapely.ops import unary_union
 
 from gallery import GalleryStore, owner_from_key
-from shapes.boxes import box_openings, rounded_rectangle
+from shapes.boxes import box_openings, rounded_rectangle, build_box
 from shapes.build import generate
 from shapes.exporter import make_3mf, make_stl, make_stl_zip
 from shapes.schemas import BoxOptions, GenerateRequest
@@ -103,7 +105,7 @@ class BoxGeneratorTests(unittest.TestCase):
     def test_dimension_and_partition_limits(self):
         for params, pattern in (
             (dict(height_mm=12, bottom_mm=10), "дна"),
-            (dict(width_mm=30, depth_mm=30, mode="divided", rows=6, columns=6), "Отделения"),
+            (dict(width_mm=30, depth_mm=30, mode="divided", rows=6, columns=6), "отделение"),
             (dict(width_mm=40, corner_radius_mm=30), "Скругление"),
         ):
             with self.subTest(params=params):
@@ -111,6 +113,102 @@ class BoxGeneratorTests(unittest.TestCase):
                     self.build(**params)
         with self.assertRaises(ValueError):
             generate(GenerateRequest(kind="box"))
+
+    def test_one_large_cell_and_three_small_cells(self):
+        options, result = self.build(sections_enabled=True, columns=3, rows=2,
+            merged_cells=[dict(row=0, col=0, colspan=3, rowspan=1)])
+        outer = rounded_rectangle(options.width_mm, options.depth_mm,
+                                  options.corner_radius_mm)
+        cavities = box_openings(options, outer)
+        self.assertEqual(len(cavities), 4)
+        upper = max(cavities, key=lambda p: p.centroid.y)
+        self.assertAlmostEqual(upper.bounds[2] - upper.bounds[0],
+                               options.width_mm - 2*options.wall_mm, delta=0.05)
+        self.assertEqual(len(result.parts), 1)
+
+    def test_nonuniform_sections_and_long_vertical_merge(self):
+        options, _ = self.build(sections_enabled=True, columns=2, rows=3,
+            column_weights=[3, 1], row_weights=[1, 1, 1],
+            merged_cells=[dict(row=0, col=0, colspan=1, rowspan=3)])
+        cavities = box_openings(options, rounded_rectangle(options.width_mm,
+            options.depth_mm, options.corner_radius_mm))
+        self.assertEqual(len(cavities), 4)
+        widest = max(cavities, key=lambda shape: shape.area)
+        self.assertGreater(widest.area, 2 * min(x.area for x in cavities))
+
+    def test_lid_and_compartments_are_independent(self):
+        for kind in ('over', 'inset'):
+            with self.subTest(kind=kind):
+                _, result = self.build(sections_enabled=True, columns=3, rows=2,
+                    lid_type=kind, merged_cells=[dict(row=0, col=0, colspan=3, rowspan=1)])
+                self.assertEqual(len(result.parts), 2)
+                body, cover = result.parts
+                self.assertAlmostEqual(min(x[2] for x in cover.vertices), 0)
+                self.assertIn('крышка', cover.name.lower())
+
+    def test_inset_lid_depth_is_real_geometry(self):
+        small_opts, small = self.build(lid_type='inset', lid_skirt_mm=5)
+        large_opts, large = self.build(lid_type='inset', lid_skirt_mm=13)
+        def cover_volume(model):
+            part = model.parts[1]
+            return trimesh.Trimesh(vertices=part.vertices,faces=part.faces,
+                                   process=False).volume
+        self.assertAlmostEqual(max(x[2] for x in small.parts[1].vertices),
+                               small_opts.lid_top_mm + 5,places=5)
+        self.assertAlmostEqual(max(x[2] for x in large.parts[1].vertices),
+                               large_opts.lid_top_mm + 13,places=5)
+        self.assertGreater(cover_volume(large),cover_volume(small))
+
+    def test_inset_lip_has_clearance_from_full_height_partitions(self):
+        opts, model = self.build(lid_type="inset", sections_enabled=True,
+            columns=3, rows=2, merged_cells=[dict(row=0, col=0,
+                                                  colspan=3, rowspan=1)])
+        outer = rounded_rectangle(opts.width_mm, opts.depth_mm,
+                                  opts.corner_radius_mm)
+        inner = outer.buffer(-opts.wall_mm, quad_segs=8)
+        partitions = inner.difference(unary_union(box_openings(opts, outer)))
+        self.assertGreater(partitions.area, 0)
+        # The lid lives beside the body in print coordinates; remove X offset.
+        lid = model.parts[1]
+        offset = opts.width_mm + 12
+        lip_tip_z = opts.lid_top_mm + opts.lid_skirt_mm
+        tip_points = [(x - offset, y) for x, y, z in lid.vertices
+                      if abs(z - lip_tip_z) < 1e-5]
+        self.assertGreater(len(tip_points), 20)
+        self.assertTrue(all(partitions.distance(Point(x, y)) > opts.lid_clearance_mm
+                            for x, y in tip_points))
+        self.assertTrue(any("перегородок" in warning for warning in model.warnings))
+
+    def test_legacy_050_projects_preserve_lid_and_dividers(self):
+        for old, expected in (('open',1),('lid',2),('divided',1)):
+            with self.subTest(mode=old):
+                opts = BoxOptions.model_validate({'mode':old,'columns':3,'rows':2})
+                self.assertEqual(len(build_box(opts).parts),expected)
+                if old == 'divided':
+                    self.assertEqual(len(box_openings(opts,rounded_rectangle(
+                        opts.width_mm,opts.depth_mm,opts.corner_radius_mm))),6)
+        # New explicit fields override any legacy mode, even when both are set.
+        _, mixed = self.build(mode='divided',sections_enabled=False,lid_type='inset')
+        self.assertEqual(len(mixed.parts),2)
+
+    def test_invalid_merged_layout_and_sizes_rejected(self):
+        wrong=[
+            dict(sections_enabled=True, columns=2, rows=2,
+                 merged_cells=[dict(col=1,row=0,colspan=2,rowspan=1)]),
+            dict(sections_enabled=True, columns=3, rows=2,
+                 merged_cells=[dict(col=0,row=0,colspan=2,rowspan=2),
+                               dict(col=1,row=0,colspan=2,rowspan=1)]),
+            dict(sections_enabled=True, columns=3, rows=2,
+                 column_weights=[1,2]),
+            dict(sections_enabled=True, columns=3, rows=2,
+                 column_weights=[100,1,1]),
+            dict(lid_type='inset',width_mm=30,depth_mm=30,wall_mm=8,
+                 lid_wall_mm=8),
+        ]
+        for kwargs in wrong:
+            with self.subTest(kwargs=kwargs),self.assertRaises(ValueError):
+                self.build(**kwargs)
+
 
 
 class BoxGalleryTests(unittest.TestCase):

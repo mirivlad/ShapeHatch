@@ -8,6 +8,7 @@ import {
 import { Viewer, type CameraView } from "./Viewer";
 import { goatDataUrl, initialPicture, initialPlate, initialSilhouette, initialBox } from "./sample";
 import { BoxControls } from "./BoxControls";
+import { upgradeBox } from "./boxLayout";
 import { AttachmentControls } from "./AttachmentControls";
 import { NumericField as NumberInput } from "./NumericField";
 import { getProjects, removeProject, saveProject } from "./storage";
@@ -119,7 +120,7 @@ export function App() {
  const currentMount:MountType=section==="box"?"none":section==="silhouette"?silhouetteMount:plate.mount_type;
  const pictureMode=section==="plate"&&plate.content_type==="image";
  const wizardSteps=section==="box"
-  ?["Габариты","Исполнение","Экспорт"]
+  ?["Корпус","Секции","Крышка","Экспорт"]
   :section==="silhouette"
   ?["Силуэт","Внутренние контуры","Размеры","Крепление","Экспорт"]
   :pictureMode
@@ -127,7 +128,7 @@ export function App() {
   :["Содержимое","Текст","Основа и размещение","Крепление","Экспорт"];
  const mountStep=section==="box"?-1:pictureMode?4:3;
  const groupFor=(step:number):string=>section==="box"
-  ?["box-dimensions","box-options","export"][step]
+  ?["box-dimensions","box-sections","box-lid","export"][step]
   :section==="silhouette"
   ?["image","contours","dimensions","loop","export"][step]
   :pictureMode
@@ -292,7 +293,7 @@ export function App() {
  }
  function loadProject(item:Project) {
   setSelectedContour(null);
-  if(item.kind==="box"&&item.box)setBox({...initialBox,...item.box});
+  if(item.kind==="box"&&item.box)setBox(upgradeBox(item.box));
   else if(item.kind==="plate"&&item.plate){
    const legacy={...initialPicture,...(item.plate.picture??{})};
    if(legacy.algorithm==="floyd"){legacy.algorithm="median";legacy.dithering="floyd";}
@@ -380,7 +381,7 @@ export function App() {
    <button type="button" className="brand" onClick={()=>navigate("home")} aria-label="На главную">
     <div className="brand-icon"><Shapes size={23} strokeWidth={2.2}/></div>
     <span>Shape<span className="brand-accent">Hatch</span></span>
-    <span className="version">BETA 0.5.0</span>
+    <span className="version">BETA 0.5.1</span>
    </button>
    <nav className="top-nav">
     <button onClick={()=>navigate("home")} className={section==="home"?"active":""}>Главная</button>
@@ -417,7 +418,7 @@ export function App() {
      <div className="card-art box-art"><div className="box-illustration"><Box size={88} strokeWidth={1.1}/></div></div>
      <div className="card-detail"><div className="card-icon"><Box size={23}/></div>
       <h3>Коробочка</h3>
-      <p>Открытая коробочка, съёмная крышка или отделения. Размеры и толщина стенок под ваш принтер.</p>
+      <p>Произвольные секции с объединением ячеек, накладные и вставные крышки, точные размеры.</p>
       <span className="card-action">Открыть генератор <Plus size={17}/></span></div>
     </button>
     <div className="generator-card future-card">
@@ -765,7 +766,7 @@ export function App() {
      <div className="view-buttons">{views.map(v=><button key={v.id} className={view===v.id?"selected":""}
       onClick={()=>setView(v.id)}>{v.label}</button>)}</div></div>
     <div className="scene">
-     <Viewer key={kind} preview={model} view={view}
+     <Viewer key={kind==="box"?"box-"+box.lid_type:kind} preview={model} view={view}
        mountEnabled={editorStep===mountStep&&["hole","loop","upright"].includes(currentMount)}
        mountPosition={kind==="plate"?plate.mount_contour_t??null:silhouette.loop_contour_t??null}
        onMountPositionChange={fraction=>kind==="plate"

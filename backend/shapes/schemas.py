@@ -134,9 +134,22 @@ class PlateOptions(BaseModel):
         return value.upper()
 
 
+class MergedBoxCell(BaseModel):
+    col: int = Field(ge=0, le=5)
+    row: int = Field(ge=0, le=5)
+    colspan: int = Field(ge=1, le=6)
+    rowspan: int = Field(ge=1, le=6)
+
+
 class BoxOptions(BaseModel):
     """Parametric open-top storage boxes, lids and integral compartments (millimetres)."""
+    # Legacy v0.5.0 mode. New independently configurable settings override it.
     mode: Literal["open", "lid", "divided"] = "open"
+    sections_enabled: bool | None = None
+    lid_type: Literal["none", "over", "inset"] | None = None
+    column_weights: list[float] = Field(default_factory=list, max_length=6)
+    row_weights: list[float] = Field(default_factory=list, max_length=6)
+    merged_cells: list["MergedBoxCell"] = Field(default_factory=list, max_length=35)
     width_mm: float = Field(default=100, ge=30, le=300)
     depth_mm: float = Field(default=75, ge=30, le=300)
     height_mm: float = Field(default=45, ge=12, le=200)
@@ -152,6 +165,13 @@ class BoxOptions(BaseModel):
     lid_skirt_mm: float = Field(default=8, ge=3, le=20)
     body_color: Color = "#247488"
     lid_color: Color = "#F3A953"
+
+    @field_validator("column_weights", "row_weights")
+    @classmethod
+    def valid_weights(cls, weights: list[float]) -> list[float]:
+        if any(not (0.001 <= weight <= 10000) for weight in weights):
+            raise ValueError("Размеры секций должны быть положительными и конечными.")
+        return weights
 
     @field_validator("body_color", "lid_color")
     @classmethod

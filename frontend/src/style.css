@@ -163,3 +163,23 @@ background:#eff8f3;border:1px solid #cee5da;border-radius:8px;margin:10px 0}
 .box-illustration svg{width:110px;height:110px}
 .box-controls .field-hint{font-size:11px;display:block;margin:13px 0}
 .box-controls .field-hint svg{vertical-align:middle;margin-right:5px}
+/* 0.5.1: editable proportional table of box compartments. */
+.box-grid-toolbar{display:grid;grid-template-columns:30px 1fr 30px 30px 1fr 30px;gap:3px;align-items:center;margin:15px 0 11px}
+.box-grid-toolbar span{text-align:center;color:#406f67;font-weight:750;font-size:10px;white-space:nowrap}
+.box-grid-toolbar button,.box-grid-actions button{display:flex;align-items:center;justify-content:center;background:#e9f5ee;color:#347a65;border:1px solid #cfe7d8;border-radius:7px;padding:7px}
+.box-grid-visual{position:relative;display:grid;gap:4px;padding:9px;min-height:190px;max-height:260px;aspect-ratio:1.4;border:2px solid #52796f;border-radius:12px;background:#a8bdb4;user-select:none}
+.box-grid-cell{min-width:0;min-height:0;padding:3px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;overflow:hidden;border:1px solid #9acabb;border-radius:5px;background:#e4f6ef;color:#35675e;box-shadow:inset 0 1px 0 #ffffffa8}
+.box-grid-cell strong{font-size:13px}
+.box-grid-cell span{font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.box-grid-cell:hover,.box-grid-cell.selected{background:#d5eadb;color:#155e48;border:2px solid #3a9876}
+.box-grid-actions{display:flex;gap:7px;margin:10px 0;flex-wrap:wrap}
+.box-grid-actions button{gap:6px;font-size:11px;font-weight:750}
+.box-grid-preset{width:100%;border:1px dashed #92b9a7;background:#f2faf4;color:#398064;border-radius:8px;padding:9px 7px;font-size:11px;font-weight:700}
+.box-size-editor{display:grid;grid-template-columns:1fr 1fr;gap:3px 9px;margin:13px 0}
+.box-size-editor>strong{grid-column:1/-1;color:#41645e;font-size:11px;margin-top:9px}
+.box-size-editor .field{margin:4px 0}
+
+.box-grid-divider{position:absolute;z-index:3;border:0;border-radius:8px;background:#2f98737c;opacity:.65;touch-action:none;transition:opacity .1s}
+.box-grid-divider:hover,.box-grid-divider:focus-visible,.box-grid-divider:active{background:#1d9269;opacity:1;outline:2px solid #d3fbe4}
+.box-grid-divider.vertical{top:25%;height:50%;width:9px;transform:translateX(-50%);cursor:col-resize}
+.box-grid-divider.horizontal{left:25%;width:50%;height:9px;transform:translateY(-50%);cursor:row-resize}

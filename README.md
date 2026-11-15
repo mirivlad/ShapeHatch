@@ -4,13 +4,24 @@
 
 [Документация на русском](docs/README.ru.md)
 
-## Features — current version 0.5.0
+## Features — current version 0.5.1
 
 ShapeHatch is an open-source workshop for making printable models, from simple
 keychains to multicolor signs. Built for experimenting and sharing designs.
 
 ### What's new in 0.5.x
 
+- **0.5.1 — Independent box compartments and covers.** Instead of a
+  mutually exclusive "box mode", enable compartments and select a lid separately.
+  Draw a proportional table of compartments with variable column widths and
+  row depths (millimetres), drag divider boundaries, merge rectangular areas,
+  and split them again.
+  Examples include one full-width cavity beside three narrower compartments.
+  Choose no lid, a slip-over lid, or a **recessed/inset lid** with user-set
+  insertion depth, lip thickness and fit clearance. The inset lip has relief
+  gaps near full-height internal partitions so it can actually fit.
+  Existing v0.5.0 box designs are migrated when reopened; hinges are planned
+  separately and **not** included in this version.
 - **0.5.0 — Parametric boxes.** Generate an open-top storage box, a box with a
   removable slip-over lid, or a box with integral grid dividers. Configure
   outer dimensions, floor and wall thickness, corner radius, divider grid,

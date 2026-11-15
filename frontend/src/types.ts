@@ -43,8 +43,12 @@ export type Plate = {
  text_depth_mm:number; text_style:"raised"|"inlay"|"engraved";
  base_color:string; text_color:string;
 };
+export type BoxMergedCell={row:number;col:number;rowspan:number;colspan:number};
 export type BoxOptions={
- mode:"open"|"lid"|"divided";
+ mode:"open"|"lid"|"divided"; // read-only legacy v0.5.0 migration
+ sections_enabled:boolean;
+ lid_type:"none"|"over"|"inset";
+ column_weights:number[];row_weights:number[];merged_cells:BoxMergedCell[];
  width_mm:number;depth_mm:number;height_mm:number;wall_mm:number;bottom_mm:number;
  corner_radius_mm:number;columns:number;rows:number;divider_mm:number;
  lid_clearance_mm:number;lid_wall_mm:number;lid_top_mm:number;lid_skirt_mm:number;

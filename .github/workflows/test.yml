@@ -14,6 +14,8 @@ jobs:
         working-directory: frontend
       - run: npm run test:numeric
         working-directory: frontend
+      - run: npm run test:box
+        working-directory: frontend
       - run: npm run build
         working-directory: frontend
   backend:

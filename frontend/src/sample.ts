@@ -31,7 +31,8 @@ export const initialPlate: Plate = {
  base_color:"#246C82",text_color:"#F7F8F4"};
 
 export const initialBox:BoxOptions={
- mode:"open",width_mm:100,depth_mm:75,height_mm:45,
+ mode:"open",sections_enabled:false,lid_type:"none",
+ column_weights:[],row_weights:[],merged_cells:[],width_mm:100,depth_mm:75,height_mm:45,
  wall_mm:2.4,bottom_mm:2.4,corner_radius_mm:7,
  columns:2,rows:2,divider_mm:2,
  lid_clearance_mm:0.3,lid_wall_mm:2,lid_top_mm:2.4,lid_skirt_mm:8,
