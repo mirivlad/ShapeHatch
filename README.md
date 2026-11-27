@@ -1,5 +1,7 @@
 # ShapeHatch
 
+[![Угостить разработчика кофе / Buy me a coffee](https://img.shields.io/badge/Support-Buy%20me%20a%20coffee-7055a5?style=flat-square&logo=buymeacoffee&logoColor=white)](https://mirv.top/support/)
+
 **ShapeHatch** — open-source browser-based parametric 3D workshop. Turn silhouettes into keychains, create multicolor text nameplates, preview in 3D, and export ready-to-slice STL/3MF.
 
 [Документация на русском](docs/README.ru.md)
@@ -243,4 +245,4 @@ AGPL-3.0-only. See LICENSE.
 
 Если проект оказался полезен, вы можете добровольно поддержать его развитие. / If this project is useful to you, you can voluntarily support its development.
 
-[![Угостить разработчика кофе / Buy me a coffee](https://img.shields.io/badge/Support-Buy%20me%20a%20coffee-7055a5?style=flat-square&logo=buymeacoffee&logoColor=white)](https://mirv.top/support/)
+[Страница поддержки / Support page](https://mirv.top/support/)
